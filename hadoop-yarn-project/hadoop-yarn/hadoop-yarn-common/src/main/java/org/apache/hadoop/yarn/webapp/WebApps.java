@@ -53,13 +53,12 @@ import com.google.inject.servlet.GuiceFilter;
 /**
  * Helpers to create an embedded webapp.
  *
- * <h4>Quick start:</h4>
  * <pre>
  *   WebApp wa = WebApps.$for(myApp).start();</pre>
  * Starts a webapp with default routes binds to 0.0.0.0 (all network interfaces)
  * on an ephemeral port, which can be obtained with:<pre>
  *   int port = wa.port();</pre>
- * <h4>With more options:</h4>
+ * With more options:
  * <pre>
  *   WebApp wa = WebApps.$for(myApp).at(address, port).
  *                        with(configuration).

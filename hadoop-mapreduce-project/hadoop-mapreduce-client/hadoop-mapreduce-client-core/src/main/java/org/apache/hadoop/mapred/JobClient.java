@@ -59,7 +59,7 @@ import org.apache.hadoop.util.ToolRunner;
  * progress, access component-tasks' reports/logs, get the Map-Reduce cluster
  * status information etc.
  * 
- * <p>The job submission process involves:
+ * The job submission process involves:
  * <ol>
  *   <li>
  *   Checking the input and output specifications of the job.
@@ -79,14 +79,14 @@ import org.apache.hadoop.util.ToolRunner;
  *   Submitting the job to the cluster and optionally monitoring
  *   it's status.
  *   </li>
- * </ol></p>
+ * </ol>
  *  
  * Normally the user creates the application, describes various facets of the
  * job via {@link JobConf} and then uses the <code>JobClient</code> to submit 
  * the job and monitor its progress.
  * 
- * <p>Here is an example on how to use <code>JobClient</code>:</p>
- * <p><blockquote><pre>
+ * Here is an example on how to use <code>JobClient</code>:
+ * <blockquote><pre>
  *     // Create a new JobConf
  *     JobConf job = new JobConf(new Configuration(), MyJob.class);
  *     
@@ -101,16 +101,14 @@ import org.apache.hadoop.util.ToolRunner;
  *
  *     // Submit the job, then poll for progress until the job is complete
  *     JobClient.runJob(job);
- * </pre></blockquote></p>
+ * </pre></blockquote>
  * 
- * <h4 id="JobControl">Job Control</h4>
- * 
- * <p>At times clients would chain map-reduce jobs to accomplish complex tasks 
+ * At times clients would chain map-reduce jobs to accomplish complex tasks 
  * which cannot be done via a single map-reduce job. This is fairly easy since 
  * the output of the job, typically, goes to distributed file-system and that 
- * can be used as the input for the next job.</p>
+ * can be used as the input for the next job.
  * 
- * <p>However, this also means that the onus on ensuring jobs are complete 
+ * However, this also means that the onus on ensuring jobs are complete 
  * (success/failure) lies squarely on the clients. In such situations the 
  * various job-control options are:
  * <ol>
@@ -127,7 +125,7 @@ import org.apache.hadoop.util.ToolRunner;
  *   {@link JobConf#setJobEndNotificationURI(String)} : setup a notification
  *   on job-completion, thus avoiding polling.
  *   </li>
- * </ol></p>
+ * </ol>
  * 
  * @see JobConf
  * @see ClusterStatus

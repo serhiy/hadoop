@@ -31,7 +31,7 @@ import org.apache.hadoop.yarn.util.Records;
 /**
  * <p>QueueInfo is a report of the runtime information of the queue.</p>
  * 
- * <p>It includes information such as:
+ * It includes information such as:
  *   <ul>
  *     <li>Queue name.</li>
  *     <li>Capacity of the queue.</li>
@@ -41,7 +41,7 @@ import org.apache.hadoop.yarn.util.Records;
  *     <li>Running applications.</li>
  *     <li>{@link QueueState} of the queue.</li>
  *   </ul>
- * </p>
+ * 
  *
  * @see QueueState
  * @see ApplicationClientProtocol#getQueueInfo(org.apache.hadoop.yarn.api.protocolrecords.GetQueueInfoRequest)

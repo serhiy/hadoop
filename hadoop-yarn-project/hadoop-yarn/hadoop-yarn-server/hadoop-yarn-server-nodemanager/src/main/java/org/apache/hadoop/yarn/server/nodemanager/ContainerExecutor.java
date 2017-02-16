@@ -103,11 +103,11 @@ public abstract class ContainerExecutor implements Configurable {
    * Prepare the environment for containers in this application to execute.
    * For $x in local.dirs
    *   create $x/$user/$appId
-   * Copy $nmLocal/appTokens -> $N/$user/$appId
+   * Copy $nmLocal/appTokens to $N/$user/$appId
    * For $rsrc in private resources
-   *   Copy $rsrc -> $N/$user/filecache/[idef]
+   *   Copy $rsrc to $N/$user/filecache/[idef]
    * For $rsrc in job resources
-   *   Copy $rsrc -> $N/$user/$appId/filecache/idef
+   *   Copy $rsrc to $N/$user/$appId/filecache/idef
    * @param user user name of application owner
    * @param appId id of the application
    * @param nmPrivateContainerTokens path to localized credentials, rsrc by NM

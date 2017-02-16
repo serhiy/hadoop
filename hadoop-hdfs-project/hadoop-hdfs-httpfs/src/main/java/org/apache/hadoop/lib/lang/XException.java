@@ -61,7 +61,7 @@ public class XException extends Exception {
 
   /**
    * Creates an XException using another XException as cause.
-   * <p/>
+   * 
    * The error code and error message are extracted from the cause.
    *
    * @param cause exception cause.

@@ -123,7 +123,7 @@ public class CryptoUtils {
    * "mapreduce.job.encrypted-intermediate-data.buffer.kb" Job configuration
    * variable.
    * 
-   * If the value of 'length' is > -1, The InputStream is additionally wrapped
+   * If the value of 'length' is less than -1, The InputStream is additionally wrapped
    * in a LimitInputStream. CryptoStreams are late buffering in nature. This
    * means they will always try to read ahead if they can. The LimitInputStream
    * will ensure that the CryptoStream does not read past the provided length

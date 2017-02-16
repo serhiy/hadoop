@@ -30,7 +30,7 @@ import org.apache.hadoop.yarn.util.Records;
  * the {@code ResourceManager} to reserve {@link Resource}s.
  * </p>
  * 
- * <p>
+ * 
  * It includes:
  * <ul>
  * <li>{@link Resource} required for each request.</li>
@@ -40,7 +40,7 @@ import org.apache.hadoop.yarn.util.Records;
  * <li>
  * Concurrency that indicates the gang size of the request.</li>
  * </ul>
- * </p>
+ * 
  * 
  */
 @Public

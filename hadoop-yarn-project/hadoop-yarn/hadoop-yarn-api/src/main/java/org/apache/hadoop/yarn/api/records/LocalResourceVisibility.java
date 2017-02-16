@@ -26,7 +26,7 @@ import org.apache.hadoop.yarn.api.ContainerManagementProtocol;
  * <p><code>LocalResourceVisibility</code> specifies the <em>visibility</em>
  * of a resource localized by the <code>NodeManager</code>.</p>
  * 
- * <p>The <em>visibility</em> can be one of:
+ * The <em>visibility</em> can be one of:
  *   <ul>
  *     <li>{@link #PUBLIC} - Shared by all users on the node.</li>
  *     <li>
@@ -38,7 +38,7 @@ import org.apache.hadoop.yarn.api.ContainerManagementProtocol;
  *       <em>same application</em> on the node.
  *     </li>
  *   </ul>
- * </p>
+ * 
  * 
  * @see LocalResource
  * @see ContainerLaunchContext

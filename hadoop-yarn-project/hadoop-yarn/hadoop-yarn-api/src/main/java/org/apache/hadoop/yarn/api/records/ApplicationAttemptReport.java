@@ -28,7 +28,7 @@ import org.apache.hadoop.yarn.util.Records;
  * <code>ApplicationAttemptReport</code> is a report of an application attempt.
  * </p>
  * 
- * <p>
+ * 
  * It includes details such as:
  * <ul>
  * <li>{@link ApplicationAttemptId} of the application.</li>
@@ -40,7 +40,7 @@ import org.apache.hadoop.yarn.util.Records;
  * <li>{@link YarnApplicationAttemptState} of the application attempt.</li>
  * <li>{@link ContainerId} of the master Container.</li>
  * </ul>
- * </p>
+ * 
  * 
  */
 @Public

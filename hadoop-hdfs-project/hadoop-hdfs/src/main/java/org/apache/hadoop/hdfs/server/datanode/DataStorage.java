@@ -18,38 +18,6 @@
 
 package org.apache.hadoop.hdfs.server.datanode;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ComparisonChain;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.util.concurrent.Futures;
-import org.apache.hadoop.classification.InterfaceAudience;
-import org.apache.hadoop.classification.InterfaceStability;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.FileUtil;
-import org.apache.hadoop.fs.HardLink;
-import org.apache.hadoop.fs.LocalFileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.permission.FsPermission;
-import org.apache.hadoop.hdfs.DFSConfigKeys;
-import org.apache.hadoop.hdfs.HdfsConfiguration;
-import org.apache.hadoop.hdfs.protocol.Block;
-import org.apache.hadoop.hdfs.protocol.HdfsConstants;
-import org.apache.hadoop.hdfs.protocol.LayoutVersion;
-import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeStorageInfo;
-import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.NodeType;
-import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.StartupOption;
-import org.apache.hadoop.hdfs.server.common.InconsistentFSStateException;
-import org.apache.hadoop.hdfs.server.common.Storage;
-import org.apache.hadoop.hdfs.server.common.StorageInfo;
-import org.apache.hadoop.hdfs.server.protocol.DatanodeStorage;
-import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
-import org.apache.hadoop.io.IOUtils;
-import org.apache.hadoop.io.nativeio.NativeIO;
-import org.apache.hadoop.util.Daemon;
-import org.apache.hadoop.util.DiskChecker;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -74,6 +42,38 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+
+import org.apache.hadoop.classification.InterfaceAudience;
+import org.apache.hadoop.classification.InterfaceStability;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FileUtil;
+import org.apache.hadoop.fs.HardLink;
+import org.apache.hadoop.fs.LocalFileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.hadoop.hdfs.DFSConfigKeys;
+import org.apache.hadoop.hdfs.HdfsConfiguration;
+import org.apache.hadoop.hdfs.protocol.Block;
+import org.apache.hadoop.hdfs.protocol.HdfsConstants;
+import org.apache.hadoop.hdfs.protocol.LayoutVersion;
+import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.NodeType;
+import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.StartupOption;
+import org.apache.hadoop.hdfs.server.common.InconsistentFSStateException;
+import org.apache.hadoop.hdfs.server.common.Storage;
+import org.apache.hadoop.hdfs.server.common.StorageInfo;
+import org.apache.hadoop.hdfs.server.protocol.DatanodeStorage;
+import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
+import org.apache.hadoop.io.IOUtils;
+import org.apache.hadoop.io.nativeio.NativeIO;
+import org.apache.hadoop.util.Daemon;
+import org.apache.hadoop.util.DiskChecker;
+
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ComparisonChain;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.util.concurrent.Futures;
 
 /** 
  * Data storage information file.
@@ -112,6 +112,8 @@ public class DataStorage extends Storage {
    *  versions of Datanodes we cannot make this field a UUID.
    */
   private String datanodeUuid = null;
+  
+  private Integer partitioningType;
 
   // Flag to ensure we only initialize storage once
   private boolean initialized = false;
@@ -141,6 +143,14 @@ public class DataStorage extends Storage {
 
   public synchronized void setDatanodeUuid(String newDatanodeUuid) {
     this.datanodeUuid = newDatanodeUuid;
+  }
+  
+  public synchronized Integer getPartitoningType() {
+	  return partitioningType;
+  }
+  
+  public synchronized void setPartitioningType(Integer newPartitioningType) {
+	  this.partitioningType = newPartitioningType;
   }
 
   /** Create an ID for this storage.
@@ -275,7 +285,7 @@ public class DataStorage extends Storage {
         LOG.info("Storage directory " + dataDir + " is not formatted for "
             + nsInfo.getBlockPoolID());
         LOG.info("Formatting ...");
-        format(sd, nsInfo, datanode.getDatanodeUuid());
+        format(sd, nsInfo, datanode.getDatanodeUuid(), datanode.getParitioningType());
         break;
       default:  // recovery part is common
         sd.doRecover(curState);
@@ -508,13 +518,14 @@ public class DataStorage extends Storage {
   }
 
   void format(StorageDirectory sd, NamespaceInfo nsInfo,
-              String datanodeUuid) throws IOException {
+              String datanodeUuid, Integer partitioningType) throws IOException {
     sd.clearDirectory(); // create directory
     this.layoutVersion = HdfsConstants.DATANODE_LAYOUT_VERSION;
     this.clusterID = nsInfo.getClusterID();
     this.namespaceID = nsInfo.getNamespaceID();
     this.cTime = 0;
     setDatanodeUuid(datanodeUuid);
+    setPartitioningType(partitioningType);
 
     if (sd.getStorageUuid() == null) {
       // Assign a new Storage UUID.
@@ -610,6 +621,19 @@ public class DataStorage extends Storage {
             ", does not match " + getDatanodeUuid() + " from other" +
             " StorageDirectory.");
       }
+    }
+    
+    if (props.getProperty("partitioningType") != null) {
+    	Integer partitioningType = Integer.parseInt(props.getProperty("partitioningType"));
+    	
+    	if (getPartitoningType() == null) {
+            setPartitioningType(partitioningType);
+          } else if (getPartitoningType().compareTo(partitioningType) != 0) {
+            throw new InconsistentFSStateException(sd.getRoot(),
+                "Root " + sd.getRoot() + ": ParitioningType=" + partitioningType +
+                ", does not match " + getPartitoningType() + " from other" +
+                " StorageDirectory.");
+          }
     }
   }
 

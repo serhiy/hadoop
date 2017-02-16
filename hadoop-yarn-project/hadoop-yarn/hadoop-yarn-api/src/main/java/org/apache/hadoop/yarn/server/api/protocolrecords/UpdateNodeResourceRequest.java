@@ -27,10 +27,10 @@ import org.apache.hadoop.yarn.server.api.ResourceManagerAdministrationProtocol;
 import org.apache.hadoop.yarn.util.Records;
 
 /**
- * <p>The request sent by admin to change a list of nodes' resource to the 
- * <code>ResourceManager</code>.</p>
+ * The request sent by admin to change a list of nodes' resource to the 
+ * <code>ResourceManager</code>.
  * 
- * <p>The request contains details such as a map from {@link NodeId} to 
+ * The request contains details such as a map from {@link NodeId} to 
  * {@link ResourceOption} for updating the RMNodes' resources in 
  * <code>ResourceManager</code>.
  * 
@@ -54,7 +54,7 @@ public abstract class UpdateNodeResourceRequest {
   
   /**
    * Get the map from <code>NodeId</code> to <code>ResourceOption</code>.
-   * @return the map of <NodeId, ResourceOption>
+   * @return the map of NodeId, ResourceOption
    */
   @Public
   @Evolving
@@ -62,7 +62,7 @@ public abstract class UpdateNodeResourceRequest {
   
   /**
    * Set the map from <code>NodeId</code> to <code>ResourceOption</code>.
-   * @param nodeResourceMap the map of <NodeId, ResourceOption>
+   * @param nodeResourceMap the map of NodeId, ResourceOption
    */
   @Public
   @Evolving

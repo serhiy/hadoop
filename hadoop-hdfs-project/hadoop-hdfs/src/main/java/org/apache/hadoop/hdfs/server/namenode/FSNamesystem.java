@@ -256,6 +256,7 @@ import org.apache.hadoop.hdfs.server.protocol.NNHAStatusHeartbeat;
 import org.apache.hadoop.hdfs.server.protocol.NamenodeCommand;
 import org.apache.hadoop.hdfs.server.protocol.NamenodeRegistration;
 import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
+import org.apache.hadoop.hdfs.server.protocol.PartitioningTypeInfo;
 import org.apache.hadoop.hdfs.server.protocol.StorageReceivedDeletedBlocks;
 import org.apache.hadoop.hdfs.server.protocol.StorageReport;
 import org.apache.hadoop.hdfs.util.ChunkedArrayList;
@@ -296,6 +297,8 @@ import com.google.common.base.Charsets;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+
+import cern.mpe.hadoop.hdfs.server.namenode.MPSRPartitioningProvider;
 
 /***************************************************
  * FSNamesystem does the actual bookkeeping work for the
@@ -557,6 +560,44 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   private final Condition cond;
 
   private final FSImage fsImage;
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  //serhiy
+  private static final int NUM_DIFFERENT_PARTITIONS = 3;
+  private Map<Integer, Integer> partitioningTypePerNode = new HashMap<Integer, Integer>();
+  private Object pTypeLock = new Object();
+  
+  PartitioningTypeInfo getNextPartitioningType() {
+	  PartitioningTypeInfo partitioningTypeInfo = new PartitioningTypeInfo();
+	  
+	  synchronized(pTypeLock) {
+		  int pType = 0, minCount = Integer.MAX_VALUE;
+		  for (int count = 0; count < NUM_DIFFERENT_PARTITIONS; count++) {
+			  if (!partitioningTypePerNode.containsKey(count)) {
+				  partitioningTypePerNode.put(count, 0);
+			  }
+			  if (partitioningTypePerNode.get(count) < minCount) {
+				  minCount = partitioningTypePerNode.get(count);
+				  pType = count;
+			  }
+		  }
+		  partitioningTypePerNode.put(pType, partitioningTypePerNode.get(pType));
+		  partitioningTypeInfo.setpType(pType);
+	  }
+	  
+	  return partitioningTypeInfo;
+  }
+  
+  
+  
+  
 
   /**
    * Notify that loading of this FSDirectory is complete, and
@@ -1887,7 +1928,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
         if (isInSafeMode()) {
           doAccessTime = false;
         }
-
+        
         final INodesInPath iip = dir.getINodesInPath(src, true);
         final INode[] inodes = iip.getINodes();
         final INodeFile inode = INodeFile.valueOf(
@@ -2528,6 +2569,51 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     }
     return status;
   }
+  
+  
+  
+  /**
+   * Create a new file entry in the namespace.
+   * 
+   * For description of parameters and exceptions thrown see
+   * {@link ClientProtocol#create}, except it returns valid file status upon
+   * success
+   */
+  // serhiy
+  HdfsFileStatus startFileMpsr(String src, PermissionStatus permissions,
+      String holder, String clientMachine, EnumSet<CreateFlag> flag,
+      boolean createParent, short replication, long blockSize, 
+      CryptoProtocolVersion[] supportedVersions)
+      throws AccessControlException, SafeModeException,
+      FileAlreadyExistsException, UnresolvedLinkException,
+      FileNotFoundException, ParentNotDirectoryException, IOException {
+    HdfsFileStatus status = null;
+    //TODO
+    /*CacheEntryWithPayload cacheEntry = RetryCache.waitForCompletion(retryCache,
+        null);
+    if (cacheEntry != null && cacheEntry.isSuccess()) {
+      return (HdfsFileStatus) cacheEntry.getPayload();
+    }*/
+    
+    try {
+      status = startFileIntMpsr(src, permissions, holder, clientMachine, flag,
+          createParent, replication, blockSize, supportedVersions);
+    } catch (AccessControlException e) {
+      logAuditEvent(false, "create", src);
+      throw e;
+    } finally {
+      //RetryCache.setState(cacheEntry, status != null, status);
+    }
+    return status;
+  }
+  
+  
+  
+  
+  
+  
+  
+  
 
   private HdfsFileStatus startFileInt(final String srcArg,
       PermissionStatus permissions, String holder, String clientMachine,
@@ -2555,6 +2641,9 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       }
       NameNode.stateChangeLog.debug(builder.toString());
     }
+    
+    // it is ok, since underlying directories should already have
+    // proper name.
     if (!DFSUtil.isValidName(src)) {
       throw new InvalidPathException(src);
     }
@@ -2568,6 +2657,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
           " minimum value (" + DFSConfigKeys.DFS_NAMENODE_MIN_BLOCK_SIZE_KEY
           + "): " + blockSize + " < " + minBlockSize);
     }
+
     byte[][] pathComponents = FSDirectory.getPathComponentsForReservedPath(src);
     boolean create = flag.contains(CreateFlag.CREATE);
     boolean overwrite = flag.contains(CreateFlag.OVERWRITE);
@@ -2653,6 +2743,163 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     logAuditEvent(true, "create", srcArg, null, stat);
     return stat;
   }
+  
+  
+  
+  
+  
+  
+  
+  // serhiy
+  private HdfsFileStatus startFileIntMpsr(final String srcArg,
+	      PermissionStatus permissions, String holder, String clientMachine,
+	      EnumSet<CreateFlag> flag, boolean createParent, short replication,
+	      long blockSize, CryptoProtocolVersion[] supportedVersions)
+	      throws AccessControlException, SafeModeException,
+	      FileAlreadyExistsException, UnresolvedLinkException,
+	      FileNotFoundException, ParentNotDirectoryException, IOException {
+	    String src = srcArg;
+	  
+	    // logging: beginning
+        StringBuilder builder = new StringBuilder();
+        builder.append("--- MPSR ---: DIR* NameSystem.startFile: src=" + src
+              + ", holder=" + holder
+              + ", clientMachine=" + clientMachine
+              + ", createParent=" + createParent
+              + ", replication=" + replication
+              + ", createFlag=" + flag.toString()
+              + ", blockSize=" + blockSize);
+        builder.append(", supportedVersions=");
+        if (supportedVersions != null) {
+          builder.append(Arrays.toString(supportedVersions));
+        } else {
+          builder.append("null");
+        }
+        NameNode.stateChangeLog.debug(builder.toString());
+        // logging: end
+
+        
+        // checks: beginning
+	    if (!DFSUtil.isValidName(src)) {
+	      throw new InvalidPathException(src);
+	    }
+	    blockManager.verifyReplication(src, replication, clientMachine);
+	    boolean skipSync = false;
+	    HdfsFileStatus stat = null;
+	    FSPermissionChecker pc = getPermissionChecker();
+	    if (blockSize < minBlockSize) {
+	      throw new IOException("--- MPSR ---: Specified block size is less than configured" +
+	          " minimum value (" + DFSConfigKeys.DFS_NAMENODE_MIN_BLOCK_SIZE_KEY
+	          + "): " + blockSize + " < " + minBlockSize);
+	    }
+	    // checks: end
+
+	    
+	    // sanitize: beginning
+	    byte[][] pathComponents = FSDirectory.getPathComponentsForReservedPath(src);
+	    boolean create = flag.contains(CreateFlag.CREATE);
+	    boolean overwrite = flag.contains(CreateFlag.OVERWRITE);
+	    boolean isLazyPersist = flag.contains(CreateFlag.LAZY_PERSIST);
+	    // sanitize: end
+	    
+	    waitForLoadingFSImage();
+
+	    /**
+	     * If the file is in an encryption zone, we optimistically create an
+	     * EDEK for the file by calling out to the configured KeyProvider.
+	     * Since this typically involves doing an RPC, we take the readLock
+	     * initially, then drop it to do the RPC.
+	     * 
+	     * Since the path can flip-flop between being in an encryption zone and not
+	     * in the meantime, we need to recheck the preconditions when we retake the
+	     * lock to do the create. If the preconditions are not met, we throw a
+	     * special RetryStartFileException to ask the DFSClient to try the create
+	     * again later.
+	     */
+	    /*CryptoProtocolVersion protocolVersion = null;
+	    CipherSuite suite = null;
+	    String ezKeyName = null;
+	    readLock();
+	    try {
+	      src = resolvePath(src, pathComponents);
+	      INodesInPath iip = dir.getINodesInPath4Write(src);
+	      // Nothing to do if the path is not within an EZ
+	      if (dir.isInAnEZ(iip)) {
+	        EncryptionZone zone = dir.getEZForPath(iip);
+	        protocolVersion = chooseProtocolVersion(zone, supportedVersions);
+	        suite = zone.getSuite();
+	        ezKeyName = dir.getKeyName(iip);
+
+	        Preconditions.checkNotNull(protocolVersion);
+	        Preconditions.checkNotNull(suite);
+	        Preconditions.checkArgument(!suite.equals(CipherSuite.UNKNOWN),
+	            "Chose an UNKNOWN CipherSuite!");
+	        Preconditions.checkNotNull(ezKeyName);
+	      }
+	    } finally {
+	      readUnlock();
+	    }
+
+	    Preconditions.checkState(
+	        (suite == null && ezKeyName == null) ||
+	            (suite != null && ezKeyName != null),
+	        "Both suite and ezKeyName should both be null or not null");
+
+	    // Generate EDEK if necessary while not holding the lock
+	    EncryptedKeyVersion edek =
+	        generateEncryptedDataEncryptionKey(ezKeyName);
+	    EncryptionFaultInjector.getInstance().startFileAfterGenerateKey();*/
+	    
+	    // Proceed with the create, using the computed cipher suite and 
+	    // generated EDEK
+	    BlocksMapUpdateInfo toRemoveBlocks = null;
+	    writeLock();
+	    try {
+	      checkOperation(OperationCategory.WRITE);
+	      checkNameNodeSafeMode("--- MPSR ---: Cannot create file" + src);
+	      
+	      src = resolvePath(src, pathComponents);
+	      
+	      toRemoveBlocks = startFileInternalMpsr(pc, src, permissions, holder, 
+	          clientMachine, create, overwrite, createParent, replication, 
+	          blockSize, isLazyPersist);
+	      
+	      stat = dir.getFileInfo(src, false,
+	          FSDirectory.isReservedRawName(srcArg), true);
+	      
+	    } catch (StandbyException se) {
+	      skipSync = true;
+	      throw se;
+	    } finally {
+	      writeUnlock();
+	      // There might be transactions logged while trying to recover the lease.
+	      // They need to be sync'ed even when an exception was thrown.
+	      if (!skipSync) {
+	        getEditLog().logSync();
+	        if (toRemoveBlocks != null) {
+	          removeBlocks(toRemoveBlocks);
+	          toRemoveBlocks.clear();
+	        }
+	      }
+	    }
+
+	    logAuditEvent(true, "create", srcArg, null, stat);
+	    return stat;
+	  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
 
   /**
    * Create a new file or overwrite an existing file<br>
@@ -2778,6 +3025,157 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       throw ie;
     }
   }
+  
+  
+  
+  
+  
+  
+  
+  
+  /**
+   * Create a new file or overwrite an existing file<br>
+   * 
+   * Once the file is create the client then allocates a new block with the next
+   * call using {@link ClientProtocol#addBlock}.
+   * <p>
+   * For description of parameters and exceptions thrown see
+   * {@link ClientProtocol#create}
+   */
+  //serhiy
+  private BlocksMapUpdateInfo startFileInternalMpsr(FSPermissionChecker pc, 
+      String src, PermissionStatus permissions, String holder, 
+      String clientMachine, boolean create, boolean overwrite, 
+      boolean createParent, short replication, long blockSize, 
+      boolean isLazyPersist)
+      throws FileAlreadyExistsException, AccessControlException,
+      UnresolvedLinkException, FileNotFoundException,
+      ParentNotDirectoryException, RetryStartFileException, IOException {
+	  
+    assert hasWriteLock();
+    
+    // Verify that the destination does not exist as a directory already.
+    
+    // TODO: 
+    /*final INodesInPath iip = dir.getINodesInPath4Write(src);
+    final INode inode = iip.getLastINode();
+    if (inode != null && inode.isDirectory()) {
+      throw new FileAlreadyExistsException(src +
+          " already exists as a directory");
+    }*/
+
+    /*FileEncryptionInfo feInfo = null;
+    if (dir.isInAnEZ(iip)) {
+      // The path is now within an EZ, but we're missing encryption parameters
+      if (suite == null || edek == null) {
+        throw new RetryStartFileException();
+      }
+      // Path is within an EZ and we have provided encryption parameters.
+      // Make sure that the generated EDEK matches the settings of the EZ.
+      String ezKeyName = dir.getKeyName(iip);
+      if (!ezKeyName.equals(edek.getEncryptionKeyName())) {
+        throw new RetryStartFileException();
+      }
+      feInfo = new FileEncryptionInfo(suite, version,
+          edek.getEncryptedKeyVersion().getMaterial(),
+          edek.getEncryptedKeyIv(),
+          ezKeyName, edek.getEncryptionKeyVersionName());
+      Preconditions.checkNotNull(feInfo);
+    }*/
+
+    // TODO: 
+    /*final INodeFile myFile = INodeFile.valueOf(inode, src, true);
+    if (isPermissionEnabled) {
+      if (overwrite && myFile != null) {
+        checkPathAccess(pc, src, FsAction.WRITE);
+      }
+      checkAncestorAccess(pc, src, FsAction.WRITE);
+    }
+
+    if (!createParent) {
+      verifyParentDir(src);
+    }*/
+
+    //TODO
+    try {
+      BlocksMapUpdateInfo toRemoveBlocks = null;
+      //TODO: maybe
+      /*if (myFile == null) {
+        if (!create) {
+          throw new FileNotFoundException("Can't overwrite non-existent " +
+              src + " for client " + clientMachine);
+        }
+      } else {
+        if (overwrite) {
+          toRemoveBlocks = new BlocksMapUpdateInfo();
+          List<INode> toRemoveINodes = new ChunkedArrayList<INode>();
+          long ret = dir.delete(src, toRemoveBlocks, toRemoveINodes, now());
+          if (ret >= 0) {
+            incrDeletedFileCount(ret);
+            removePathAndBlocks(src, null, toRemoveINodes, true);
+          }
+        } else {
+          // If lease soft limit time is expired, recover the lease
+          recoverLeaseInternal(myFile, src, holder, clientMachine, false);
+          throw new FileAlreadyExistsException(src + " for client " +
+              clientMachine + " already exists");
+        }
+      }*/
+
+      checkFsObjectLimit();
+      INodeFile [] newNodes = null;
+      INode [] underlyingDirs;
+
+      // Always do an implicit mkdirs for parent directory tree.
+      Path parent = new Path(src).getParent();
+      if (parent != null) {
+    	  underlyingDirs = mkdirsRecursivelyMpsr(parent.toString(), permissions, true, now());
+    	  if (underlyingDirs != null) {
+    		  newNodes = new INodeFile[MPSRPartitioningProvider.NUM_PARTITIONS];
+    		  for (int i = 0; i < MPSRPartitioningProvider.NUM_PARTITIONS; i++) {
+    			  newNodes[i] = dir.addFileMpsr(src, permissions, replication, blockSize, holder, clientMachine, i);
+    		  }
+    	  }
+      }
+
+      if (newNodes == null) {
+        throw new IOException("--- MPSR ---: Unable to add " + src +  " to namespace");
+      }
+      
+      for (INodeFile newNode: newNodes) {
+    	  //TODO: possible problem here because of src
+    	  leaseManager.addLease(newNode.getFileUnderConstructionFeature().getClientName(), src);
+
+	      // Set encryption attributes if necessary
+	      /*if (feInfo != null) {
+	        dir.setFileEncryptionInfo(src, feInfo);
+	        newNode = dir.getInode(newNode.getId()).asFile();
+	      }*/
+	
+	      //TODO:
+	      //setNewINodeStoragePolicy(newNode, iip, isLazyPersist);
+	
+	      // record file record in log, record new generation stamp
+	      //getEditLog().logOpenFile(src, newNode, overwrite, logRetryEntry);
+	      NameNode.stateChangeLog.info("--- MPSR ---: DIR* NameSystem.startFile: added " + src + " inode " + newNode.getId() + " " + holder);
+    	}
+      return toRemoveBlocks;
+    } catch (IOException ie) {
+      NameNode.stateChangeLog.warn("--- MPSR ---: DIR* NameSystem.startFile: " + src + " " + ie.getMessage());
+      throw ie;
+    }
+  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
 
   private void setNewINodeStoragePolicy(INodeFile inode,
                                         INodesInPath iip,
@@ -2878,6 +3276,91 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       throw ie;
     }
   }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  //serhiy
+  private LocatedBlock[] appendMpsrFileInternal(FSPermissionChecker pc, String src,
+	      String holder, String clientMachine, boolean logRetryCache)
+	      throws AccessControlException, UnresolvedLinkException,
+	      FileNotFoundException, IOException {
+	    
+	  	assert hasWriteLock();
+
+	    // Verify that the destination does not exist as a directory already.
+	    final INodesInPath iip = dir.getINodesInPath4Write(src);
+	    final INode inode = iip.getLastINode();
+	    if (inode != null && inode.isDirectory()) {
+	      throw new FileAlreadyExistsException("Cannot append to directory " + src
+	          + "; already exists as a directory.");
+	    }
+	    if (isPermissionEnabled) {
+	      checkPathAccess(pc, src, FsAction.WRITE);
+	    }
+
+	    try {
+	      if (inode == null) {
+	        throw new FileNotFoundException("failed to append to non-existent file "
+	          + src + " for client " + clientMachine);
+	      }
+	      INodeFile myFile = INodeFile.valueOf(inode, src, true);
+	      final BlockStoragePolicy lpPolicy =
+	          blockManager.getStoragePolicy("LAZY_PERSIST");
+
+	      if (lpPolicy != null &&
+	          lpPolicy.getId() == myFile.getStoragePolicyID()) {
+	        throw new UnsupportedOperationException(
+	            "Cannot append to lazy persist file " + src);
+	      }
+	      // Opening an existing file for write - may need to recover lease.
+	      recoverLeaseInternal(myFile, src, holder, clientMachine, false);
+	      
+	      // recoverLeaseInternal may create a new InodeFile via 
+	      // finalizeINodeFileUnderConstruction so we need to refresh 
+	      // the referenced file.  
+	      myFile = INodeFile.valueOf(dir.getINode(src), src, true);
+	      final BlockInfo lastBlock = myFile.getLastBlock();
+	      // Check that the block has at least minimum replication.
+	      if(lastBlock != null && lastBlock.isComplete() &&
+	          !getBlockManager().isSufficientlyReplicated(lastBlock)) {
+	        throw new IOException("append: lastBlock=" + lastBlock +
+	            " of src=" + src + " is not sufficiently replicated yet.");
+	      }
+	      //TODO
+	      return null; //prepareFileForWrite(src, iip, holder, clientMachine, true,
+	          //logRetryCache);
+	    } catch (IOException ie) {
+	      NameNode.stateChangeLog.warn("DIR* NameSystem.append: " +ie.getMessage());
+	      throw ie;
+	    }
+	  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
   
   /**
    * Replace current node with a INodeUnderConstruction.
@@ -3089,6 +3572,10 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     }
   }
 
+  
+  
+  
+  
   /**
    * Append to an existing file in the namespace.
    */
@@ -3115,6 +3602,39 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       RetryCache.setState(cacheEntry, success, lb);
     }
   }
+  
+  
+  // serhiy
+  LocatedBlock[] appendMpsrFile(String src, String holder, String clientMachine)
+	      throws AccessControlException, SafeModeException,
+	      FileAlreadyExistsException, FileNotFoundException,
+	      ParentNotDirectoryException, IOException {
+	    LocatedBlock [] lb = null;
+	    /*CacheEntryWithPayload cacheEntry = RetryCache.waitForCompletion(retryCache,
+	        null);
+	    if (cacheEntry != null && cacheEntry.isSuccess()) {
+	      return (LocatedBlock) cacheEntry.getPayload();
+	    }*/
+	      
+	    boolean success = false;
+	    try {
+	      lb = appendMpsrFileInt(src, holder, clientMachine, false);
+	      success = true;
+	      return lb;
+	    } catch (AccessControlException e) {
+	      logAuditEvent(false, "appendMpsr", src);
+	      throw e;
+	    } finally {
+	      //RetryCache.setState(cacheEntry, success, lb);
+	    }
+	  }
+  
+  
+  
+  
+  
+  
+  
 
   private LocatedBlock appendFileInt(final String srcArg, String holder,
       String clientMachine, boolean logRetryCache)
@@ -3165,6 +3685,85 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     logAuditEvent(true, "append", srcArg);
     return lb;
   }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  //serhiy
+  private LocatedBlock[] appendMpsrFileInt(final String srcArg, String holder,
+	      String clientMachine, boolean logRetryCache)
+	      throws AccessControlException, SafeModeException,
+	      FileAlreadyExistsException, FileNotFoundException,
+	      ParentNotDirectoryException, IOException {
+	    String src = srcArg;
+	    if (NameNode.stateChangeLog.isDebugEnabled()) {
+	      NameNode.stateChangeLog.debug("DIR* NameSystem.appendFile: src=" + src
+	          + ", holder=" + holder
+	          + ", clientMachine=" + clientMachine);
+	    }
+	    boolean skipSync = false;
+	    if (!supportAppends) {
+	      throw new UnsupportedOperationException(
+	          "Append is not enabled on this NameNode. Use the " +
+	          DFS_SUPPORT_APPEND_KEY + " configuration option to enable it.");
+	    }
+
+	    LocatedBlock [] lb = null;
+	    FSPermissionChecker pc = getPermissionChecker();
+	    byte[][] pathComponents = FSDirectory.getPathComponentsForReservedPath(src);
+	    writeLock();
+	    try {
+	      checkOperation(OperationCategory.WRITE);
+	      checkNameNodeSafeMode("Cannot append to file" + src);
+	      src = resolvePath(src, pathComponents);
+	      lb = appendMpsrFileInternal(pc, src, holder, clientMachine, logRetryCache);
+	    } catch (StandbyException se) {
+	      skipSync = true;
+	      throw se;
+	    } finally {
+	      writeUnlock();
+	      // There might be transactions logged while trying to recover the lease.
+	      // They need to be sync'ed even when an exception was thrown.
+	      if (!skipSync) {
+	        getEditLog().logSync();
+	      }
+	    }
+	    if (lb != null) {
+	      if (NameNode.stateChangeLog.isDebugEnabled()) {
+	    	  for (LocatedBlock l: lb) {
+	        NameNode.stateChangeLog.info("DIR* NameSystem.appendFile: file "
+	            +src+" for "+holder+" at "+clientMachine
+	            +" block " + l.getBlock()
+	            +" block size " + l.getBlock().getNumBytes());
+	    	  }
+	      }
+	    }
+	    logAuditEvent(true, "appendMpsr", srcArg);
+	    return lb;
+	  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
 
   ExtendedBlock getExtendedBlock(Block blk) {
     return new ExtendedBlock(blockPoolId, blk);
@@ -4223,6 +4822,21 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     }
   }
 
+  
+  boolean mkdirsMpsr(String src, PermissionStatus permissions,
+	      boolean createParent) throws IOException, UnresolvedLinkException {
+	    boolean ret = false;
+	    try {
+	    	LOG.info("--- MPSR ---: mkdirsMpsr() : Creating directories [src = '" + src + "', createParent = '" + createParent + "'].");
+	      ret = mkdirsIntMpsr(src, permissions, createParent);
+	    } catch (AccessControlException e) {
+	      logAuditEvent(false, "mkdirs", src);
+	      throw e;
+	    }
+	    return ret;
+	  }
+  
+  
   /**
    * Create all the necessary directories
    */
@@ -4237,6 +4851,48 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     }
     return ret;
   }
+  
+  
+  
+  // serhiy
+  private boolean mkdirsIntMpsr(final String srcArg, PermissionStatus permissions,
+	      boolean createParent) throws IOException, UnresolvedLinkException {
+	  
+	    String src = srcArg;
+	    if(NameNode.stateChangeLog.isDebugEnabled()) {
+	      NameNode.stateChangeLog.debug("DIR* NameSystem.mkdirs: " + src);
+	    }
+	    if (!DFSUtil.isValidName(src)) {
+	      throw new InvalidPathException(src);
+	    }
+	    FSPermissionChecker pc = getPermissionChecker();
+	    checkOperation(OperationCategory.WRITE);
+	    byte[][] pathComponents = FSDirectory.getPathComponentsForReservedPath(src);
+	    HdfsFileStatus resultingStat = null;
+	    boolean status = false;
+	    writeLock();
+	    try {
+	      checkOperation(OperationCategory.WRITE);   
+	      checkNameNodeSafeMode("Cannot create directory " + src);
+	      src = resolvePath(src, pathComponents);
+	      status = mkdirsInternalMpsr(pc, src, permissions, createParent);
+	      
+	      if (status) {
+	        resultingStat = getAuditFileInfo(src, false);
+	      }
+	    } finally {
+	      writeUnlock();
+	    }
+	    getEditLog().logSync();
+	    if (status) {
+	      logAuditEvent(true, "mkdirs", srcArg, null, resultingStat);
+	    }
+	    return status;
+	  }
+  
+  
+  
+  
 
   private boolean mkdirsInt(final String srcArg, PermissionStatus permissions,
       boolean createParent) throws IOException, UnresolvedLinkException {
@@ -4303,6 +4959,44 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     }
     return true;
   }
+  
+  
+  
+  private boolean mkdirsInternalMpsr(FSPermissionChecker pc, String src,
+	      PermissionStatus permissions, boolean createParent) 
+	      throws IOException, UnresolvedLinkException {
+	    assert hasWriteLock();
+	    if (isPermissionEnabled) {
+	      checkTraverse(pc, src);
+	    }
+	    if (dir.isDirMutable(src)) {
+	      // all the users of mkdirs() are used to expect 'true' even if
+	      // a new directory is not created.
+	      return true;
+	    }
+	    if (isPermissionEnabled) {
+	      checkAncestorAccess(pc, src, FsAction.WRITE);
+	    }
+	    if (!createParent) {
+	      verifyParentDir(src);
+	    }
+
+	    // validate that we have enough inodes. This is, at best, a 
+	    // heuristic because the mkdirs() operation might need to 
+	    // create multiple inodes.
+	    checkFsObjectLimit();
+
+	    INode [] inodes = mkdirsRecursivelyMpsr(src, permissions, false, now());
+	    if (inodes == null) {
+	      throw new IOException("--- MPSR ---: mkdirsInternalMpsr() : Failed to create directory: " + src);
+	    } else {
+	    	LOG.info("--- MPSR ---: mkdirsInternalMpsr() : Successfully created master [master = '" + src + "'].");
+	    	for (int count = 0; count < MPSRPartitioningProvider.NUM_PARTITIONS; count++) {
+	    		LOG.info("--- MPSR ---: mkdirsInternalMpsr() : + --- " + count + " " + inodes[count].getLocalName());
+	    	}
+	    }
+	    return true;
+	  }
 
   /**
    * Create a directory
@@ -4322,33 +5016,138 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
    * @throws SnapshotAccessControlException if path is in RO snapshot
    */
   private boolean mkdirsRecursively(String src, PermissionStatus permissions,
+          boolean inheritPermission, long now)
+   throws FileAlreadyExistsException, QuotaExceededException,
+          UnresolvedLinkException, SnapshotAccessControlException,
+          AclException {
+	  src = FSDirectory.normalizePath(src);
+	    byte[][] components = INode.getPathComponents(src);
+	    final int lastInodeIndex = components.length - 1;
+
+	    // lock root
+	    dir.writeLock();
+	    try {
+	      INodesInPath iip = dir.getExistingPathINodes(components);
+	      if (iip.isSnapshot()) {
+	        throw new SnapshotAccessControlException("Modification on RO snapshot is disallowed");
+	      }
+	      INode[] inodes = iip.getINodes();
+	      
+	      // find the index of the first null in inodes[]
+	      StringBuilder pathbuilder = new StringBuilder();
+	      int i = 1;
+	      for(; i < inodes.length && inodes[i] != null; i++) {
+	        pathbuilder.append(Path.SEPARATOR).append(DFSUtil.bytes2String(components[i]));
+	        
+	        if (!inodes[i].isDirectory()) {
+	          throw new FileAlreadyExistsException("Parent path is not a directory: " + pathbuilder + " "+inodes[i].getLocalName());
+	        }
+	      }
+
+	      // default to creating parent dirs with the given perms
+	      PermissionStatus parentPermissions = permissions;
+
+	      // if not inheriting and it's the last inode, there's no use in
+	      // computing perms that won't be used
+	      if (inheritPermission || (i < lastInodeIndex)) {
+	        // if inheriting (ie. creating a file or symlink), use the parent dir,
+	        // else the supplied permissions
+	        // NOTE: the permissions of the auto-created directories violate posix
+	        FsPermission parentFsPerm = inheritPermission
+	                ? inodes[i-1].getFsPermission() : permissions.getPermission();
+
+	        // ensure that the permissions allow user write+execute
+	        if (!parentFsPerm.getUserAction().implies(FsAction.WRITE_EXECUTE)) {
+	          parentFsPerm = new FsPermission(
+	                  parentFsPerm.getUserAction().or(FsAction.WRITE_EXECUTE),
+	                  parentFsPerm.getGroupAction(),
+	                  parentFsPerm.getOtherAction()
+	          );
+	        }
+
+	        if (!parentPermissions.getPermission().equals(parentFsPerm)) {
+	          parentPermissions = new PermissionStatus(
+	                  parentPermissions.getUserName(),
+	                  parentPermissions.getGroupName(),
+	                  parentFsPerm
+	          );
+	          // when inheriting, use same perms for entire path
+	          if (inheritPermission) permissions = parentPermissions;
+	        }
+	      }
+
+	      // create directories beginning from the first null index
+	      for(; i < inodes.length; i++) {
+	        pathbuilder.append(Path.SEPARATOR).append(DFSUtil.bytes2String(components[i]));
+	        dir.unprotectedMkdir(allocateNewInodeId(), iip, i, components[i], (i < lastInodeIndex) ? parentPermissions : permissions, null, now);
+	        
+	        if (inodes[i] == null) {
+	          return false;
+	        }
+	        // Directory creation also count towards FilesCreated
+	        // to match count of FilesDeleted metric.
+	        NameNode.getNameNodeMetrics().incrFilesCreated();
+
+	        final String cur = pathbuilder.toString();
+	        getEditLog().logMkDir(cur, inodes[i]);
+	        NameNode.stateChangeLog.info("mkdirs: created directory " + cur);
+	      }
+	    } finally {
+	      dir.writeUnlock();
+	    }
+	    return true;
+  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  // serhiy
+  private INode[] mkdirsRecursivelyMpsr(String src, PermissionStatus permissions,
                  boolean inheritPermission, long now)
           throws FileAlreadyExistsException, QuotaExceededException,
                  UnresolvedLinkException, SnapshotAccessControlException,
                  AclException {
+	  
+	LOG.info("--- MPSR ---: Creating directories recursively " + src + " with underlying directories.");  
+	  
     src = FSDirectory.normalizePath(src);
+    src = MPSRPartitioningProvider.orderTags(src);
     byte[][] components = INode.getPathComponents(src);
     final int lastInodeIndex = components.length - 1;
+    
+    INode[] underlyingInodes = new INode[MPSRPartitioningProvider.NUM_PARTITIONS];
 
+    // lock root
     dir.writeLock();
     try {
       INodesInPath iip = dir.getExistingPathINodes(components);
       if (iip.isSnapshot()) {
-        throw new SnapshotAccessControlException(
-                "Modification on RO snapshot is disallowed");
+        throw new SnapshotAccessControlException("Modification on RO snapshot is disallowed");
       }
       INode[] inodes = iip.getINodes();
-
+      
       // find the index of the first null in inodes[]
       StringBuilder pathbuilder = new StringBuilder();
-      int i = 1;
+      //int i = 1;
+      int i = 0;
       for(; i < inodes.length && inodes[i] != null; i++) {
-        pathbuilder.append(Path.SEPARATOR).
-            append(DFSUtil.bytes2String(components[i]));
+        pathbuilder.append(Path.SEPARATOR).append(DFSUtil.bytes2String(components[i]));
+        
         if (!inodes[i].isDirectory()) {
-          throw new FileAlreadyExistsException(
-                  "Parent path is not a directory: "
-                  + pathbuilder + " "+inodes[i].getLocalName());
+          throw new FileAlreadyExistsException("Parent path is not a directory: " + pathbuilder + " "+inodes[i].getLocalName());
+        }
+        
+        // get the pointer to the last existing underlying directory
+        for (int j = 0; j < MPSRPartitioningProvider.NUM_PARTITIONS; j++) {
+	        if (((INodeDirectory)inodes[i]).getUnderlyingDirectory(j) != null) {
+	        	underlyingInodes[j] = ((INodeDirectory)inodes[i]).getUnderlyingDirectory(j);
+	        }
         }
       }
 
@@ -4386,13 +5185,15 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 
       // create directories beginning from the first null index
       for(; i < inodes.length; i++) {
-        pathbuilder.append(Path.SEPARATOR).
-            append(DFSUtil.bytes2String(components[i]));
-        dir.unprotectedMkdir(allocateNewInodeId(), iip, i, components[i],
-                (i < lastInodeIndex) ? parentPermissions : permissions, null,
-                now);
+        pathbuilder.append(Path.SEPARATOR).append(DFSUtil.bytes2String(components[i]));
+        INodeDirectory createdDir = dir.unprotectedMkdirMpsr(this, iip, i, components[i], (i < lastInodeIndex) ? parentPermissions : permissions, null, now);
+        
+        for (int j = 0; j < MPSRPartitioningProvider.NUM_PARTITIONS; j++) {
+        	underlyingInodes[j] = mkdirUnderlying(createdDir, (INodeUnderlyingDirectory)underlyingInodes[j], DFSUtil.bytes2String(components[i]), j);
+        }
+        
         if (inodes[i] == null) {
-          return false;
+          return null;
         }
         // Directory creation also count towards FilesCreated
         // to match count of FilesDeleted metric.
@@ -4400,15 +5201,38 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 
         final String cur = pathbuilder.toString();
         getEditLog().logMkDir(cur, inodes[i]);
-        if(NameNode.stateChangeLog.isDebugEnabled()) {
-          NameNode.stateChangeLog.debug(
-                  "mkdirs: created directory " + cur);
-        }
+        NameNode.stateChangeLog.info("mkdirs: created directory " + cur);
       }
     } finally {
       dir.writeUnlock();
     }
-    return true;
+    return underlyingInodes;
+  }
+  
+  private INodeUnderlyingDirectory mkdirUnderlying(INodeDirectory master, INodeUnderlyingDirectory parent, String subdirectory, int partitioning) {
+	  INodeUnderlyingDirectory underlyingDirectory = null;
+	  if (MPSRPartitioningProvider.getPartitioningTags(partitioning).contains(MPSRPartitioningProvider.getTag(subdirectory))) {
+		  for (INode inode: parent.getChildrenList()) {
+			  if (inode.getLocalName().equals(subdirectory)) {
+				  underlyingDirectory = (INodeUnderlyingDirectory) inode;
+			  }
+		  }
+		  underlyingDirectory = new INodeUnderlyingDirectory(allocateNewInodeId(), DFSUtil.string2Bytes(subdirectory), master.getPermissionStatus(), master.getAccessTime());
+	  } else {
+		  for (INode inode: parent.getChildrenList()) {
+			  if (inode.getLocalName().equals(subdirectory)) {
+				  underlyingDirectory = (INodeUnderlyingDirectory) inode;
+			  }
+		  }
+	  }
+	  
+	  if (underlyingDirectory != null) {
+		  underlyingDirectory.setParent(parent);
+		  parent.addChild(underlyingDirectory);
+		  master.addUnderlyingDirectory(partitioning, underlyingDirectory);
+	  }
+	  
+	  return underlyingDirectory != null ? underlyingDirectory : parent;
   }
 
   /**

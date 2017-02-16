@@ -31,29 +31,29 @@ import java.util.*;
  * than the job default output via the <code>OutputCollector</code> passed to
  * the <code>map()</code> and <code>reduce()</code> methods of the
  * <code>Mapper</code> and <code>Reducer</code> implementations.
- * <p/>
+ * 
  * Each additional output, or named output, may be configured with its own
  * <code>OutputFormat</code>, with its own key class and with its own value
  * class.
- * <p/>
+ * 
  * A named output can be a single file or a multi file. The later is refered as
  * a multi named output.
- * <p/>
+ * 
  * A multi named output is an unbound set of files all sharing the same
  * <code>OutputFormat</code>, key class and value class configuration.
- * <p/>
+ * 
  * When named outputs are used within a <code>Mapper</code> implementation,
  * key/values written to a name output are not part of the reduce phase, only
  * key/values written to the job <code>OutputCollector</code> are part of the
  * reduce phase.
- * <p/>
+ * 
  * MultipleOutputs supports counters, by default the are disabled. The counters
  * group is the {@link MultipleOutputs} class name.
- * </p>
+ * 
  * The names of the counters are the same as the named outputs. For multi
  * named outputs the name of the counter is the concatenation of the named
  * output, and underscore '_' and the multiname.
- * <p/>
+ * 
  * Job configuration usage pattern is:
  * <pre>
  *
@@ -82,7 +82,7 @@ import java.util.*;
  *
  * ...
  * </pre>
- * <p/>
+ * 
  * Job configuration usage pattern is:
  * <pre>
  *
@@ -271,7 +271,7 @@ public class MultipleOutputs {
 
   /**
    * Adds a named output for the job.
-   * <p/>
+   * 
    *
    * @param conf              job conf to add the named output
    * @param namedOutput       named output name, it has to be a word, letters
@@ -291,7 +291,7 @@ public class MultipleOutputs {
 
   /**
    * Adds a multi named output for the job.
-   * <p/>
+   * 
    *
    * @param conf              job conf to add the named output
    * @param namedOutput       named output name, it has to be a word, letters
@@ -311,7 +311,7 @@ public class MultipleOutputs {
 
   /**
    * Adds a named output for the job.
-   * <p/>
+   * 
    *
    * @param conf              job conf to add the named output
    * @param namedOutput       named output name, it has to be a word, letters
@@ -339,12 +339,12 @@ public class MultipleOutputs {
 
   /**
    * Enables or disables counters for the named outputs.
-   * <p/>
+   * 
    * By default these counters are disabled.
-   * <p/>
+   * 
    * MultipleOutputs supports counters, by default the are disabled.
    * The counters group is the {@link MultipleOutputs} class name.
-   * </p>
+   * 
    * The names of the counters are the same as the named outputs. For multi
    * named outputs the name of the counter is the concatenation of the named
    * output, and underscore '_' and the multiname.
@@ -358,12 +358,12 @@ public class MultipleOutputs {
 
   /**
    * Returns if the counters for the named outputs are enabled or not.
-   * <p/>
+   * 
    * By default these counters are disabled.
-   * <p/>
+   * 
    * MultipleOutputs supports counters, by default the are disabled.
    * The counters group is the {@link MultipleOutputs} class name.
-   * </p>
+   * 
    * The names of the counters are the same as the named outputs. For multi
    * named outputs the name of the counter is the concatenation of the named
    * output, and underscore '_' and the multiname.
@@ -465,7 +465,7 @@ public class MultipleOutputs {
 
   /**
    * Gets the output collector for a named output.
-   * <p/>
+   * 
    *
    * @param namedOutput the named output name
    * @param reporter    the reporter
@@ -480,7 +480,7 @@ public class MultipleOutputs {
 
   /**
    * Gets the output collector for a multi named output.
-   * <p/>
+   * 
    *
    * @param namedOutput the named output name
    * @param multiName   the multi name part
@@ -525,7 +525,7 @@ public class MultipleOutputs {
 
   /**
    * Closes all the opened named outputs.
-   * <p/>
+   * 
    * If overriden subclasses must invoke <code>super.close()</code> at the
    * end of their <code>close()</code>
    *

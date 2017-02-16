@@ -28,7 +28,7 @@ import org.apache.hadoop.io.Writable;
 /**
  * Status information on the current state of the Map-Reduce cluster.
  * 
- * <p><code>ClusterMetrics</code> provides clients with information such as:
+ * <code>ClusterMetrics</code> provides clients with information such as:
  * <ol>
  *   <li>
  *   Size of the cluster.  
@@ -40,15 +40,15 @@ import org.apache.hadoop.io.Writable;
  *   Slot capacity of the cluster. 
  *   </li>
  *   <li>
- *   The number of currently occupied/reserved map & reduce slots.
+ *   The number of currently occupied/reserved map and reduce slots.
  *   </li>
  *   <li>
- *   The number of currently running map & reduce tasks.
+ *   The number of currently running map and reduce tasks.
  *   </li>
  *   <li>
  *   The number of job submissions.
  *   </li>
- * </ol></p>
+ * </ol>
  * 
  * <p>Clients can query for the latest <code>ClusterMetrics</code>, via 
  * {@link Cluster#getClusterStatus()}.</p>

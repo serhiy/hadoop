@@ -36,10 +36,10 @@ import java.io.IOException;
 import java.util.concurrent.*;
 
 /**
- * Multithreaded implementation for @link org.apache.hadoop.mapred.MapRunnable.
+ * Multithreaded implementation for {@link org.apache.hadoop.mapred.MapRunnable}.
  * <p>
  * It can be used instead of the default implementation,
- * @link org.apache.hadoop.mapred.MapRunner, when the Map operation is not CPU
+ * {@link org.apache.hadoop.mapred.MapRunner}, when the Map operation is not CPU
  * bound in order to improve throughput.
  * <p>
  * Map implementations using this MapRunnable must be thread-safe.

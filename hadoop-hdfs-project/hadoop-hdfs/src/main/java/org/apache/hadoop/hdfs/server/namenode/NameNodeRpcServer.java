@@ -130,6 +130,7 @@ import org.apache.hadoop.hdfs.server.protocol.NamenodeProtocols;
 import org.apache.hadoop.hdfs.server.protocol.NamenodeRegistration;
 import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
 import org.apache.hadoop.hdfs.server.protocol.NodeRegistration;
+import org.apache.hadoop.hdfs.server.protocol.PartitioningTypeInfo;
 import org.apache.hadoop.hdfs.server.protocol.RemoteEditLogManifest;
 import org.apache.hadoop.hdfs.server.protocol.StorageBlockReport;
 import org.apache.hadoop.hdfs.server.protocol.StorageReceivedDeletedBlocks;
@@ -175,6 +176,8 @@ import org.apache.hadoop.util.VersionUtil;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
 import com.google.protobuf.BlockingService;
+
+import cern.mpe.hadoop.hdfs.server.namenode.MPSRPartitioningProvider;
 
 /**
  * This class is responsible for handling all of the RPC calls to the NameNode.
@@ -571,17 +574,41 @@ class NameNodeRpcServer implements NamenodeProtocols {
       stateChangeLog.debug("*DIR* NameNode.create: file "
                          +src+" for "+clientName+" at "+clientMachine);
     }
-    if (!checkPathLength(src)) {
-      throw new IOException("create: Pathname too long.  Limit "
-          + MAX_PATH_LENGTH + " characters, " + MAX_PATH_DEPTH + " levels.");
+    
+    HdfsFileStatus fileStatus;
+    if (MPSRPartitioningProvider.isMpsr(src)) {
+	    /*List<String> underlyingDirs = MPSRPartitioningProvider.underlyingDirectories(src);
+	    for (String underlyingDir: underlyingDirs) {
+		    if (!checkPathLength(underlyingDir)) {
+		      throw new IOException("--- MPSR ---: create: Pathname too long.  Limit "
+		          + MAX_PATH_LENGTH + " characters, " + MAX_PATH_DEPTH + " levels.");
+		    }
+	    }*/
+	    
+	    namesystem.checkOperation(OperationCategory.WRITE);
+	    fileStatus = namesystem.startFileMpsr(src, new PermissionStatus(
+	        getRemoteUser().getShortUserName(), null, masked),
+	        clientName, clientMachine, flag.get(), createParent, replication,
+	        blockSize, supportedVersions);
+	    metrics.incrFilesCreated();
+	    metrics.incrCreateFileOps();
+	    
+    } else {
+    	if (!checkPathLength(src)) {
+		      throw new IOException("create: Pathname too long.  Limit "
+		          + MAX_PATH_LENGTH + " characters, " + MAX_PATH_DEPTH + " levels.");
+		    }
+    	
+        namesystem.checkOperation(OperationCategory.WRITE);
+        fileStatus = namesystem.startFile(src, new PermissionStatus(
+            getRemoteUser().getShortUserName(), null, masked),
+            clientName, clientMachine, flag.get(), createParent, replication,
+            blockSize, supportedVersions);
+        metrics.incrFilesCreated();
+        metrics.incrCreateFileOps();
     }
-    namesystem.checkOperation(OperationCategory.WRITE);
-    HdfsFileStatus fileStatus = namesystem.startFile(src, new PermissionStatus(
-        getRemoteUser().getShortUserName(), null, masked),
-        clientName, clientMachine, flag.get(), createParent, replication,
-        blockSize, supportedVersions);
-    metrics.incrFilesCreated();
-    metrics.incrCreateFileOps();
+    
+
     return fileStatus;
   }
 
@@ -599,6 +626,26 @@ class NameNodeRpcServer implements NamenodeProtocols {
     metrics.incrFilesAppended();
     return info;
   }
+  
+  
+  
+  
+  
+  //serhiy
+  public LocatedBlock[] appendMpsr(String src, String clientName) throws IOException {
+	  checkNNStartup();
+	  String clientMachine = getClientMachine();
+	  stateChangeLog.info("--- MPSR ---: *DIR* NameNode.append: file " +src+" for "+clientName+" at "+clientMachine);
+	  namesystem.checkOperation(OperationCategory.WRITE);
+	  LocatedBlock [] info = namesystem.appendMpsrFile(src, clientName, clientMachine);
+	  metrics.incrFilesAppended();
+	  return info;
+  }
+  
+  
+  
+  
+  
 
   @Override // ClientProtocol
   public boolean recoverLease(String src, String clientName) throws IOException {
@@ -850,7 +897,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
       throw new IOException("mkdirs: Pathname too long.  Limit " 
                             + MAX_PATH_LENGTH + " characters, " + MAX_PATH_DEPTH + " levels.");
     }
-    return namesystem.mkdirs(src,
+    return namesystem.mkdirsMpsr(src,
         new PermissionStatus(getRemoteUser().getShortUserName(),
             null, masked), createParent);
   }
@@ -1248,6 +1295,46 @@ class NameNodeRpcServer implements NamenodeProtocols {
     namesystem.checkSuperuserPrivilege();
     return namesystem.getNamespaceInfo();
   }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  //serhiy
+  @Override
+  public PartitioningTypeInfo partitioningTypeRequest() throws IOException {
+		checkNNStartup();
+		namesystem.checkSuperuserPrivilege();
+		return namesystem.getNextPartitioningType();
+  };
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
 
   /** 
    * Verifies the given registration.

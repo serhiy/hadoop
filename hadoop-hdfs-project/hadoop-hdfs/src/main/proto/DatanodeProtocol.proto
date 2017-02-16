@@ -404,6 +404,25 @@ service DatanodeProtocolService {
    * Request the version
    */
   rpc versionRequest(VersionRequestProto) returns(VersionResponseProto);
+  
+  
+  
+  
+  
+  
+  
+  /**
+   * serhiy: Request the partitioning type
+   */
+  rpc partitioningTypeRequest(PartitioningTypeRequestProto) returns(PartitioningTypeResponseProto);
+  
+  
+  
+  
+  
+  
+  
+  
 
   /**
    * Report corrupt blocks at the specified location

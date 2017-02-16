@@ -181,6 +181,9 @@ public interface DatanodeProtocol {
   @Idempotent
   public NamespaceInfo versionRequest() throws IOException;
 
+  //serhiy
+  public PartitioningTypeInfo partitioningTypeRequest() throws IOException; 
+  
   /**
    * same as {@link org.apache.hadoop.hdfs.protocol.ClientProtocol#reportBadBlocks(LocatedBlock[])}
    * }

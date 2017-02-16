@@ -33,7 +33,7 @@ import org.apache.hadoop.yarn.util.Records;
  * <p><code>ContainerLaunchContext</code> represents all of the information
  * needed by the <code>NodeManager</code> to launch a container.</p>
  * 
- * <p>It includes details such as:
+ * It includes details such as:
  *   <ul>
  *     <li>{@link ContainerId} of the container.</li>
  *     <li>{@link Resource} allocated to the container.</li>
@@ -47,7 +47,7 @@ import org.apache.hadoop.yarn.util.Records;
  *     <li>Environment variables for the launched process.</li>
  *     <li>Command to launch the container.</li>
  *   </ul>
- * </p>
+ * 
  * 
  * @see ContainerManagementProtocol#startContainers(org.apache.hadoop.yarn.api.protocolrecords.StartContainersRequest)
  */

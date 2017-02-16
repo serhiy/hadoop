@@ -47,31 +47,31 @@ import org.apache.hadoop.util.ToolRunner;
  * random binary sequence file of BytesWritable.
  * In order for this program to generate data for terasort with 10-byte keys
  * and 90-byte values, have the following config:
- * <xmp>
- * <?xml version="1.0"?>
- * <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
- * <configuration>
- *   <property>
- *     <name>mapreduce.randomwriter.minkey</name>
- *     <value>10</value>
- *   </property>
- *   <property>
- *     <name>mapreduce.randomwriter.maxkey</name>
- *     <value>10</value>
- *   </property>
- *   <property>
- *     <name>mapreduce.randomwriter.minvalue</name>
- *     <value>90</value>
- *   </property>
- *   <property>
- *     <name>mapreduce.randomwriter.maxvalue</name>
- *     <value>90</value>
- *   </property>
- *   <property>
- *     <name>mapreduce.randomwriter.totalbytes</name>
- *     <value>1099511627776</value>
- *   </property>
- * </configuration></xmp>
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
  * 
  * Equivalently, {@link RandomWriter} also supports all the above options
  * and ones supported by {@link GenericOptionsParser} via the command-line.

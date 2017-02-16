@@ -28,7 +28,7 @@ import org.apache.hadoop.yarn.util.Records;
  * <p>The finalization request sent by the <code>ApplicationMaster</code> to
  * inform the <code>ResourceManager</code> about its completion.</p>
  *
- * <p>The final request includes details such:
+ * The final request includes details such:
  *   <ul>
  *     <li>Final state of the <code>ApplicationMaster</code></li>
  *     <li>
@@ -37,7 +37,7 @@ import org.apache.hadoop.yarn.util.Records;
  *     </li>
  *     <li>Tracking URL</li>
  *   </ul>
- * </p>
+ * 
  *
  * @see ApplicationMasterProtocol#finishApplicationMaster(FinishApplicationMasterRequest)
  */

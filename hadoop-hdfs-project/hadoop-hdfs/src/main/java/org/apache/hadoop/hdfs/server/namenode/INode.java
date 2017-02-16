@@ -20,7 +20,9 @@ package org.apache.hadoop.hdfs.server.namenode;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -29,10 +31,10 @@ import org.apache.hadoop.fs.ContentSummary;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.fs.permission.PermissionStatus;
-import org.apache.hadoop.hdfs.server.blockmanagement.BlockStoragePolicySuite;
 import org.apache.hadoop.hdfs.DFSUtil;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.QuotaExceededException;
+import org.apache.hadoop.hdfs.server.blockmanagement.BlockStoragePolicySuite;
 import org.apache.hadoop.hdfs.server.namenode.INodeReference.DstReference;
 import org.apache.hadoop.hdfs.server.namenode.INodeReference.WithName;
 import org.apache.hadoop.hdfs.server.namenode.snapshot.Snapshot;
@@ -54,7 +56,7 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]> {
 
   /** parent is either an {@link INodeDirectory} or an {@link INodeReference}.*/
   private INode parent = null;
-
+  
   INode(INode parent) {
     this.parent = parent;
   }
@@ -333,7 +335,7 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]> {
   public boolean isDirectory() {
     return false;
   }
-
+  
   /** Cast this inode to an {@link INodeDirectory}.  */
   public INodeDirectory asDirectory() {
     throw new IllegalStateException("Current inode is not a directory: "
@@ -611,7 +613,7 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]> {
   }
 
   /** Set parent directory */
-  public final void setParent(INodeDirectory parent) {
+  public final void setParent(INode parent) {
     this.parent = parent;
   }
 
@@ -784,8 +786,8 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]> {
     out.print(getParentString());
     out.print(", " + getPermissionStatus(snapshotId));
   }
-  
-  /**
+ 
+/**
    * Information used for updating the blocksMap when deleting files.
    */
   public static class BlocksMapUpdateInfo {

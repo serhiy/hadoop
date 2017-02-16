@@ -65,7 +65,7 @@ public abstract class RpcProgram extends SimpleChannelUpstreamHandler {
    * @param progNumber program number as defined in RFC 1050
    * @param lowProgVersion lowest version of the specification supported
    * @param highProgVersion highest version of the specification supported
-   * @param DatagramSocket registrationSocket if not null, use this socket to
+   * @param registrationSocket if not null, use this socket to
    *        register with portmap daemon
    * @param allowInsecurePorts true to allow client connections from
    *        unprivileged ports, false otherwise
@@ -84,9 +84,11 @@ public abstract class RpcProgram extends SimpleChannelUpstreamHandler {
     LOG.info("Will " + (allowInsecurePorts ? "" : "not ") + "accept client "
         + "connections from unprivileged ports");
   }
-
+  
   /**
-   * Register this program with the local portmapper.
+     * Register this program with the local portmapper.
+   * @param transport
+   * @param boundPort
    */
   public void register(int transport, int boundPort) {
     if (boundPort != port) {
@@ -103,7 +105,9 @@ public abstract class RpcProgram extends SimpleChannelUpstreamHandler {
   }
   
   /**
-   * Unregister this program with the local portmapper.
+   * Unregister this program with the local portmapper. 
+   * @param transport
+   * @param boundPort
    */
   public void unregister(int transport, int boundPort) {
     if (boundPort != port) {
@@ -121,6 +125,8 @@ public abstract class RpcProgram extends SimpleChannelUpstreamHandler {
   
   /**
    * Register the program with Portmap or Rpcbind
+   * @param mapEntry
+   * @param set
    */
   protected void register(PortmapMapping mapEntry, boolean set) {
     XDR mappingRequest = PortmapRequest.create(mapEntry, set);

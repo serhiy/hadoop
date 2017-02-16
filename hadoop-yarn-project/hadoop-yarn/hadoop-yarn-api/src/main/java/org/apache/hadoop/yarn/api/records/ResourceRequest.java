@@ -31,7 +31,7 @@ import org.apache.hadoop.yarn.util.Records;
  * application to the <code>ResourceManager</code> to obtain various 
  * <code>Container</code> allocations.</p>
  * 
- * <p>It includes:
+ * It includes:
  *   <ul>
  *     <li>{@link Priority} of the request.</li>
  *     <li>
@@ -51,7 +51,7 @@ import org.apache.hadoop.yarn.util.Records;
  *       or strict (i.e. specify hard constraint on resource allocation).
  *     </li>
  *   </ul>
- * </p>
+ * 
  * 
  * @see Resource
  * @see ApplicationMasterProtocol#allocate(org.apache.hadoop.yarn.api.protocolrecords.AllocateRequest)
@@ -267,7 +267,7 @@ public abstract class ResourceRequest implements Comparable<ResourceRequest> {
   /**
    * Set node label expression of this resource request. Now only support
    * specifying a single node label. In the future we will support more complex
-   * node label expression specification like AND(&&), OR(||), etc.
+   * node label expression specification like AND, OR, etc.
    * 
    * Any please note that node label expression now can only take effect when
    * the resource request has resourceName = ANY

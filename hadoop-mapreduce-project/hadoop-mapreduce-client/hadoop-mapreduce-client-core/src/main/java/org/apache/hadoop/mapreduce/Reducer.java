@@ -39,14 +39,14 @@ import java.util.Iterator;
  * <ol>
  *   <li>
  *   
- *   <h4 id="Shuffle">Shuffle</h4>
+ *   
  *   
  *   <p>The <code>Reducer</code> copies the sorted output from each 
  *   {@link Mapper} using HTTP across the network.</p>
  *   </li>
  *   
  *   <li>
- *   <h4 id="Sort">Sort</h4>
+ *   
  *   
  *   <p>The framework merge sorts <code>Reducer</code> inputs by 
  *   <code>key</code>s 
@@ -55,7 +55,7 @@ import java.util.Iterator;
  *   <p>The shuffle and sort phases occur simultaneously i.e. while outputs are
  *   being fetched they are merged.</p>
  *      
- *   <h5 id="SecondarySort">SecondarySort</h5>
+ *  
  *   
  *   <p>To achieve a secondary sort on the values returned by the value 
  *   iterator, the application should extend the key with the secondary
@@ -83,10 +83,10 @@ import java.util.Iterator;
  *   </li>
  *   
  *   <li>   
- *   <h4 id="Reduce">Reduce</h4>
+ *   
  *   
  *   <p>In this phase the 
- *   {@link #reduce(Object, Iterable, Context)}
+ *   
  *   method is called for each <code>&lt;key, (collection of values)&gt;</code> in
  *   the sorted inputs.</p>
  *   <p>The output of the reduce task is typically written to a 
@@ -98,7 +98,7 @@ import java.util.Iterator;
  * <p>The output of the <code>Reducer</code> is <b>not re-sorted</b>.</p>
  * 
  * <p>Example:</p>
- * <p><blockquote><pre>
+ * 
  * public class IntSumReducer&lt;Key&gt; extends Reducer&lt;Key,IntWritable,
  *                                                 Key,IntWritable&gt; {
  *   private IntWritable result = new IntWritable();
@@ -113,7 +113,7 @@ import java.util.Iterator;
  *     context.write(key, result);
  *   }
  * }
- * </pre></blockquote></p>
+ * 
  * 
  * @see Mapper
  * @see Partitioner

@@ -47,24 +47,24 @@ public abstract class GetQueueInfoRequest {
   }
 
   /**
-   * Get the <em>queue name</em> for which to get queue information.
-   * @return <em>queue name</em> for which to get queue information
+   * Get the queue name for which to get queue information.
+   * @return queue name for which to get queue information
    */
   @Public
   @Stable
   public abstract String getQueueName();
   
   /**
-   * Set the <em>queue name</em> for which to get queue information
-   * @param queueName <em>queue name</em> for which to get queue information
+   * Set the queue name for which to get queue information
+   * @param queueName queue name for which to get queue information
    */
   @Public
   @Stable
   public abstract void setQueueName(String queueName);
 
   /**
-   * Is information about <em>active applications<e/m> required?
-   * @return <code>true</code> if applications' information is to be included,
+   * Is information about <em>active applications</em> required
+   * @return <code>true</code> if applications information is to be included,
    *         else <code>false</code>
    */
   @Public

@@ -591,3 +591,29 @@ message SnapshotInfoProto {
 message RollingUpgradeStatusProto {
   required string blockPoolId = 1;
 }
+
+
+
+
+
+
+
+/**
+ * serhiy: void request
+ */
+message PartitioningTypeRequestProto {
+}
+
+/**
+ * serhiy: Partitioning type response from namenode.
+ */
+message PartitioningTypeResponseProto {
+  required PartitioningTypeInfoProto info = 1;
+}
+
+/**
+ * serhiy: Partitioning type information that describes partitioning
+ */
+message PartitioningTypeInfoProto {
+  required uint32 pType = 1;               // Represents partitioning type
+}

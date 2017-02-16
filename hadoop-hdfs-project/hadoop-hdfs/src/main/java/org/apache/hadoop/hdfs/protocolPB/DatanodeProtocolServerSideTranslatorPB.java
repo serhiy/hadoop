@@ -45,6 +45,8 @@ import org.apache.hadoop.hdfs.protocol.proto.DatanodeProtocolProtos.StorageBlock
 import org.apache.hadoop.hdfs.protocol.proto.DatanodeProtocolProtos.StorageReceivedDeletedBlocksProto;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.DatanodeIDProto;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.LocatedBlockProto;
+import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.PartitioningTypeRequestProto;
+import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.PartitioningTypeResponseProto;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.VersionRequestProto;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.VersionResponseProto;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeCommand;
@@ -52,6 +54,7 @@ import org.apache.hadoop.hdfs.server.protocol.DatanodeProtocol;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeRegistration;
 import org.apache.hadoop.hdfs.server.protocol.HeartbeatResponse;
 import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
+import org.apache.hadoop.hdfs.server.protocol.PartitioningTypeInfo;
 import org.apache.hadoop.hdfs.server.protocol.ReceivedDeletedBlockInfo;
 import org.apache.hadoop.hdfs.server.protocol.StorageBlockReport;
 import org.apache.hadoop.hdfs.server.protocol.StorageReceivedDeletedBlocks;
@@ -240,6 +243,41 @@ public class DatanodeProtocolServerSideTranslatorPB implements
     return VersionResponseProto.newBuilder()
         .setInfo(PBHelper.convert(info)).build();
   }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  //serhiy
+  @Override
+  public PartitioningTypeResponseProto partitioningTypeRequest(RpcController controller,
+  		PartitioningTypeRequestProto request) throws ServiceException {
+    PartitioningTypeInfo info;
+    try {
+      info = impl.partitioningTypeRequest();
+    } catch (IOException e) {
+      throw new ServiceException(e);
+    }
+    return PartitioningTypeResponseProto.newBuilder()
+        .setInfo(PBHelper.convert(info)).build();
+  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
 
   @Override
   public ReportBadBlocksResponseProto reportBadBlocks(RpcController controller,

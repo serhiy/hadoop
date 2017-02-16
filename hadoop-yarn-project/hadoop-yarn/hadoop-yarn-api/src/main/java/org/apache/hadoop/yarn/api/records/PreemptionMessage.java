@@ -45,7 +45,7 @@ import org.apache.hadoop.yarn.util.Records;
  * PreemptionContract#getContainers()} may not be killed.<p>
  *
  * <p>Each preemption message reflects the RM's current understanding of the
- * cluster state, so a request to return <emph>N</emph> containers may not
+ * cluster state, so a request to return N containers may not
  * reflect containers the AM is releasing, recently exited containers the RM has
  * yet to learn about, or new containers allocated before the message was
  * generated. Conversely, an RM may request a different profile of containers in

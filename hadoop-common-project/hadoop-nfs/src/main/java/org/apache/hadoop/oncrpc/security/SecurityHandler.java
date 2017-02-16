@@ -41,27 +41,48 @@ public abstract class SecurityHandler {
     return false;
   }
 
-  /** Used by GSS */
+  /**
+   * Used by GSS
+   * @param request
+   * @param data
+   * @return
+   * @throws IOException
+   */
   public XDR unwrap(RpcCall request, byte[] data ) throws IOException {
     throw new UnsupportedOperationException();
   }
   
-  /** Used by GSS */
+  /**
+   * Used by GSS
+   * @param request
+   * @param response
+   * @return
+   * @throws IOException
+   */
   public byte[] wrap(RpcCall request, XDR response) throws IOException {
     throw new UnsupportedOperationException();
   }
   
-  /** Used by AUTH_SYS */
+  /**
+   * Used by AUTH_SY
+   * @return
+   */
   public int getUid() {
     throw new UnsupportedOperationException();
   }
-  
-  /** Used by AUTH_SYS */
+
+  /**
+   * Used by AUTH_SYS
+   * @return
+   */
   public int getGid() {
     throw new UnsupportedOperationException();
   }
 
-  /** Used by AUTH_SYS */
+  /**
+   * Used by AUTH_SYS
+   * @return
+   */
   public int[] getAuxGids() {
     throw new UnsupportedOperationException();
   }

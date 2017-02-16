@@ -58,13 +58,13 @@ import org.apache.hadoop.mapreduce.Partitioner;
  * and <code>j</code> as first and last element, repectively, when 
  * <code>i</code> and <code>j</code> are the left and right offset.
  * 
- * <p>For Hadoop programs written in Java, it is advisable to use one of 
+ * For Hadoop programs written in Java, it is advisable to use one of 
  * the following static convenience methods for setting the offsets:
  * <ul>
  *   <li>{@link #setOffsets}</li>
  *   <li>{@link #setLeftOffset}</li>
  *   <li>{@link #setRightOffset}</li>
- * </ul></p>
+ * </ul>
  */
 @InterfaceAudience.Public
 @InterfaceStability.Evolving

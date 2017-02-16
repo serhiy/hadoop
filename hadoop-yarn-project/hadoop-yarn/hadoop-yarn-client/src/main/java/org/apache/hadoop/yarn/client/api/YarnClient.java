@@ -103,13 +103,13 @@ public abstract class YarnClient extends AbstractService {
    * submitted successfully and accepted by the ResourceManager.
    * </p>
    * 
-   * <p>
+   * 
    * Users should provide an {@link ApplicationId} as part of the parameter
    * {@link ApplicationSubmissionContext} when submitting a new application,
    * otherwise it will throw the {@link ApplicationIdNotProvidedException}.
-   * </p>
+   * 
    *
-   * <p>This internally calls {@link ApplicationClientProtocol#submitApplication
+   * This internally calls {@link ApplicationClientProtocol#submitApplication
    * (SubmitApplicationRequest)}, and after that, it internally invokes
    * {@link ApplicationClientProtocol#getApplicationReport
    * (GetApplicationReportRequest)} and waits till it can make sure that the
@@ -119,7 +119,7 @@ public abstract class YarnClient extends AbstractService {
    * #getApplicationReport(GetApplicationReportRequest)} will throw
    * the {@link ApplicationNotFoundException}. This API automatically resubmits
    * the application with the same {@link ApplicationSubmissionContext} when it
-   * catches the {@link ApplicationNotFoundException}</p>
+   * catches the {@link ApplicationNotFoundException}
    *
    * @param appContext
    *          {@link ApplicationSubmissionContext} containing all the details
@@ -154,12 +154,12 @@ public abstract class YarnClient extends AbstractService {
    * Get a report of the given Application.
    * </p>
    * 
-   * <p>
+   * 
    * In secure mode, <code>YARN</code> verifies access to the application, queue
    * etc. before accepting the request.
-   * </p>
    * 
-   * <p>
+   * 
+   * 
    * If the user does not have <code>VIEW_APP</code> access then the following
    * fields in the report will be set to stubbed values:
    * <ul>
@@ -171,7 +171,7 @@ public abstract class YarnClient extends AbstractService {
    * <li>original tracking URL - set to "N/A"</li>
    * <li>resource usage report - all values are -1</li>
    * </ul>
-   * </p>
+   * 
    * 
    * @param appId
    *          {@link ApplicationId} of the application that needs a report
@@ -184,20 +184,20 @@ public abstract class YarnClient extends AbstractService {
 
   /**
    * Get the AMRM token of the application.
-   * <p/>
+   * 
    * The AMRM token is required for AM to RM scheduling operations. For 
    * managed Application Masters Yarn takes care of injecting it. For unmanaged
    * Applications Masters, the token must be obtained via this method and set
    * in the {@link org.apache.hadoop.security.UserGroupInformation} of the
    * current user.
-   * <p/>
+   * 
    * The AMRM token will be returned only if all the following conditions are
    * met:
-   * <li>
-   *   <ul>the requester is the owner of the ApplicationMaster</ul>
-   *   <ul>the application master is an unmanaged ApplicationMaster</ul>
-   *   <ul>the application master is in ACCEPTED state</ul>
-   * </li>
+   * <ul>
+   *   <li>the requester is the owner of the ApplicationMaster</li>
+   *   <li>the application master is an unmanaged ApplicationMaster</li>
+   *   <li>the application master is in ACCEPTED state</li>
+   * </ul>
    * Else this method returns NULL.
    *
    * @param appId {@link ApplicationId} of the application to get the AMRM token
@@ -415,8 +415,6 @@ public abstract class YarnClient extends AbstractService {
    *          a report
    * @return application attempt report
    * @throws YarnException
-   * @throws {@link ApplicationAttemptNotFoundException} if application attempt
-   *         not found
    * @throws IOException
    */
   public abstract ApplicationAttemptReport getApplicationAttemptReport(
@@ -450,7 +448,6 @@ public abstract class YarnClient extends AbstractService {
    *          {@link ContainerId} of the container that needs a report
    * @return container report
    * @throws YarnException
-   * @throws {@link ContainerNotFoundException} if container not found.
    * @throws IOException
    */
   public abstract ContainerReport getContainerReport(ContainerId containerId)

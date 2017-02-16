@@ -157,6 +157,7 @@ import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.NamenodeCommandProto;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.NamenodeRegistrationProto;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.NamenodeRegistrationProto.NamenodeRoleProto;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.NamespaceInfoProto;
+import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.PartitioningTypeInfoProto;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.RecoveringBlockProto;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.RemoteEditLogManifestProto;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.RemoteEditLogProto;
@@ -213,6 +214,7 @@ import org.apache.hadoop.hdfs.server.protocol.NNHAStatusHeartbeat;
 import org.apache.hadoop.hdfs.server.protocol.NamenodeCommand;
 import org.apache.hadoop.hdfs.server.protocol.NamenodeRegistration;
 import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
+import org.apache.hadoop.hdfs.server.protocol.PartitioningTypeInfo;
 import org.apache.hadoop.hdfs.server.protocol.ReceivedDeletedBlockInfo;
 import org.apache.hadoop.hdfs.server.protocol.ReceivedDeletedBlockInfo.BlockStatus;
 import org.apache.hadoop.hdfs.server.protocol.RegisterCommand;
@@ -577,6 +579,26 @@ public class PBHelper {
         info.getBlockPoolID(), storage.getCTime(), info.getBuildVersion(),
         info.getSoftwareVersion());
   }
+  
+  
+  
+  
+  
+  
+  
+  
+  // serhiy
+  public static PartitioningTypeInfo convert(PartitioningTypeInfoProto info) {
+	    return new PartitioningTypeInfo(info.getPType());
+	  }
+  
+  
+  
+  
+  
+  
+  
+  
 
   public static NamenodeCommand convert(NamenodeCommandProto cmd) {
     if (cmd == null) return null;
@@ -1232,6 +1254,22 @@ public class PBHelper {
         .setStorageInfo(PBHelper.convert((StorageInfo)info))
         .setSoftwareVersion(info.getSoftwareVersion()).build();
   }
+  
+  
+  
+  
+  
+  // serhiy
+  public static PartitioningTypeInfoProto convert(PartitioningTypeInfo info) {
+	    return PartitioningTypeInfoProto.newBuilder().setPType(info.getpType()).build();
+  }
+  
+  
+  
+  
+  
+  
+  
   
   // Located Block Arrays and Lists
   public static LocatedBlockProto[] convertLocatedBlock(LocatedBlock[] lb) {

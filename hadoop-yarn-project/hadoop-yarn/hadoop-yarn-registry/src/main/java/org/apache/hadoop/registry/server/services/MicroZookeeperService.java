@@ -49,7 +49,7 @@ import java.net.UnknownHostException;
  * in a YARN service...it's been derived from Apache Twill.
  *
  * It implements {@link RegistryBindingSource} and provides binding information,
- * <i>once started</i>. Until <code>start()</code> is called, the hostname &
+ * <i>once started</i>. Until <code>start()</code> is called, the hostname and
  * port may be undefined. Accordingly, the service raises an exception in this
  * condition.
  *

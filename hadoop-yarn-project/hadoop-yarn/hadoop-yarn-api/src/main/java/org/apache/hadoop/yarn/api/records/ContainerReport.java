@@ -28,7 +28,7 @@ import org.apache.hadoop.yarn.util.Records;
  * <code>ContainerReport</code> is a report of an container.
  * </p>
  * 
- * <p>
+ * 
  * It includes details such as:
  * <ul>
  * <li>{@link ContainerId} of the container.</li>
@@ -43,7 +43,7 @@ import org.apache.hadoop.yarn.util.Records;
  * <li>Log URL.</li>
  * <li>nodeHttpAddress</li>
  * </ul>
- * </p>
+ * 
  * 
  */
 

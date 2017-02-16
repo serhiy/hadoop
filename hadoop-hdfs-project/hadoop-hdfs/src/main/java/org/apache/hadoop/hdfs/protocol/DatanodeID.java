@@ -46,6 +46,8 @@ public class DatanodeID implements Comparable<DatanodeID> {
   private int infoPort;      // info server port
   private int infoSecurePort; // info server port
   private int ipcPort;       // IPC server port
+  
+  private Integer partitioningType;
 
   /**
    * UUID identifying a given datanode. For upgraded Datanodes this is the
@@ -269,4 +271,15 @@ public class DatanodeID implements Comparable<DatanodeID> {
   public int compareTo(DatanodeID that) {
     return getXferAddr().compareTo(that.getXferAddr());
   }
+  
+  
+  
+  
+	public Integer getPartitioningType() {
+		return partitioningType;
+	}
+	
+	public void setPartitioningType(Integer partitioningType) {
+		this.partitioningType = partitioningType;
+	}
 }

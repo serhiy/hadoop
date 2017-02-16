@@ -29,11 +29,16 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Map;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+
+import cern.mpe.hadoop.hdfs.server.namenode.MPSRPartitioningProvider;
+
 import org.apache.hadoop.HadoopIllegalArgumentException;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
@@ -96,6 +101,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import org.apache.hadoop.security.AccessControlException;
+import org.mortbay.log.Log;
 
 /**
  * Both FSDirectory and FSNamesystem manage the state of the namespace.
@@ -106,6 +112,7 @@ import org.apache.hadoop.security.AccessControlException;
  **/
 @InterfaceAudience.Private
 public class FSDirectory implements Closeable {
+  // serhiy
   private static INodeDirectory createRoot(FSNamesystem namesystem) {
     final INodeDirectory r = new INodeDirectory(
         INodeId.ROOT_INODE_ID,
@@ -117,6 +124,10 @@ public class FSDirectory implements Closeable {
         DirectoryWithQuotaFeature.DEFAULT_DISKSPACE_QUOTA);
     r.addSnapshottableFeature();
     r.setSnapshotQuota(0);
+    // add underlying directories to ROOT
+    for (int i = 0; i < MPSRPartitioningProvider.NUM_PARTITIONS; i++) {
+    	r.addUnderlyingDirectory(i, new INodeUnderlyingDirectory(namesystem.allocateNewInodeId(), INodeDirectory.ROOT_NAME, namesystem.createFsOwnerPermissions(new FsPermission((short) 0755)), 0L));
+    }
     return r;
   }
 
@@ -138,6 +149,7 @@ public class FSDirectory implements Closeable {
       XAttrHelper.buildXAttr(SECURITY_XATTR_UNREADABLE_BY_SUPERUSER, null);
 
   INodeDirectory rootDir;
+
   private final FSNamesystem namesystem;
   private volatile boolean skipQuotaCheck = false; //skip while consuming edits
   private final int maxComponentLength;
@@ -338,6 +350,56 @@ public class FSDirectory implements Closeable {
     }
     return newNode;
   }
+  
+  
+  
+  
+  
+  
+  /**
+   * Add the given filename to the fs.
+   * @throws FileAlreadyExistsException
+   * @throws QuotaExceededException
+   * @throws UnresolvedLinkException
+   * @throws SnapshotAccessControlException 
+   */
+  // serhiy
+  INodeFile addFileMpsr(String path,
+		  			PermissionStatus permissions,
+                    short replication, long preferredBlockSize,
+                    String clientName, String clientMachine, int partitioningType)
+    throws FileAlreadyExistsException, QuotaExceededException,
+      UnresolvedLinkException, SnapshotAccessControlException, AclException {
+
+    long modTime = now();
+    INodeFile newNode = newINodeFile(namesystem.allocateNewInodeId(),
+        permissions, modTime, modTime, replication, preferredBlockSize);
+    newNode.toUnderConstruction(clientName, clientMachine);
+
+    boolean added = false;
+    writeLock();
+    try {
+      added = addINodeMpsr(path, newNode, partitioningType);
+    } finally {
+      writeUnlock();
+    }
+    if (!added) {
+      NameNode.stateChangeLog.info("--- MPSR ---: DIR* addFile: failed to add " + path);
+      return null;
+    }
+
+    NameNode.stateChangeLog.info("--- MPSR ---: DIR* addFile: " + path + " is added");
+    
+    return newNode;
+  }
+  
+  
+  
+  
+  
+  
+  
+  
 
   INodeFile unprotectedAddFile( long id,
                             String path, 
@@ -1596,6 +1658,12 @@ public class FSDirectory implements Closeable {
       throws UnresolvedLinkException {
     return INodesInPath.resolve(rootDir, components);
   }
+  
+  // serhiy
+  INodesInPath getExistingPathINodesMpsr(byte[][] components, String src, int partitioningType)
+	      throws UnresolvedLinkException {
+	    return INodesInPath.resolveMpsr(rootDir, components, src, partitioningType);
+  }
 
   /**
    * Get {@link INode} associated with the file / directory.
@@ -1629,6 +1697,20 @@ public class FSDirectory implements Closeable {
       readUnlock();
     }
   }
+  
+  /**
+   * Get {@link INode} associated with the file / directory.
+   */
+  //serhiy
+  /*public INodesInPath[] getINodesInPath4WriteMpsr(String src
+      ) throws UnresolvedLinkException, SnapshotAccessControlException {
+    readLock();
+    try {
+      return getINodesInPath4WriteMpsr(src, true);
+    } finally {
+      readUnlock();
+    }
+  }*/
 
   /**
    * Get {@link INode} associated with the file / directory.
@@ -1858,6 +1940,27 @@ public class FSDirectory implements Closeable {
     }
   }
   
+  // serhiy
+  INodeDirectory unprotectedMkdirMpsr(FSNamesystem namesystem, INodesInPath inodesInPath,
+	      int pos, byte[] name, PermissionStatus permission,
+	      List<AclEntry> aclEntries, long timestamp)
+	      throws QuotaExceededException, AclException {
+    assert hasWriteLock();
+    
+    Long inodeId = namesystem.allocateNewInodeId();
+    
+    final INodeDirectory dir = new INodeDirectory(inodeId, name, permission,
+        timestamp);
+    if (addChild(inodesInPath, pos, dir, true)) {
+      /*if (aclEntries != null) {
+        AclStorage.updateINodeAcl(dir, aclEntries, Snapshot.CURRENT_STATE_ID);
+      }*/
+      inodesInPath.setINode(pos, dir);
+    }
+    
+    return dir;
+  }  
+  
   /**
    * Add the given child to the namespace.
    * @param src The full path name of the child node.
@@ -1875,6 +1978,37 @@ public class FSDirectory implements Closeable {
       writeUnlock();
     }
   }
+  
+  
+  
+  
+  
+  
+  
+  /**
+   * Add the given child to the namespace.
+   * @param src The full path name of the child node.
+   * @throws QuotaExceededException is thrown if it violates quota limit
+   */
+  // serhiy
+  private boolean addINodeMpsr(String src, INode child, int partitioningType) throws QuotaExceededException, UnresolvedLinkException {
+    byte[][] components = INode.getPathComponents(src);
+    child.setLocalName(components[components.length-1]);
+    //cacheName(child);
+    writeLock();
+    try {
+      return addLastINodeMpsr(getExistingPathINodesMpsr(components, src, partitioningType), child, true);
+    } finally {
+      writeUnlock();
+    }
+  }
+  
+  
+  
+  
+  
+  
+  
 
   /**
    * Verify quota for adding or moving a new INode with required 
@@ -2052,6 +2186,25 @@ public class FSDirectory implements Closeable {
     final int pos = inodesInPath.getINodes().length - 1;
     return addChild(inodesInPath, pos, inode, checkQuota);
   }
+  
+  
+  
+  
+  
+  /**
+   * The same as {@link #addChild(INodesInPath, int, INode, boolean)}
+   * with pos = length - 1.
+   */
+  private boolean addLastINodeMpsr(INodesInPath inodesInPath,
+      INode inode, boolean checkQuota) throws QuotaExceededException {
+    final int pos = inodesInPath.getINodes().length - 1;
+    return addChildMpsr(inodesInPath, pos, inode, checkQuota);
+  }
+  
+  
+  
+  
+  
 
   /** Add a node child to the inodes at index pos. 
    * Its ancestors are stored at [0, pos-1].
@@ -2111,6 +2264,83 @@ public class FSDirectory implements Closeable {
     }
     return added;
   }
+  
+  
+  
+  
+  
+  
+  
+  /** Add a node child to the inodes at index pos. 
+   * Its ancestors are stored at [0, pos-1].
+   * @return false if the child with this name already exists; 
+   *         otherwise return true;
+   * @throws QuotaExceededException is thrown if it violates quota limit
+   */
+  // serhiy
+  private boolean addChildMpsr(INodesInPath iip, int pos,
+      INode child, boolean checkQuota) throws QuotaExceededException {
+    final INode[] inodes = iip.getINodes();
+    // Disallow creation of /.reserved. This may be created when loading
+    // editlog/fsimage during upgrade since /.reserved was a valid name in older
+    // release. This may also be called when a user tries to create a file
+    // or directory /.reserved.
+    if (pos == 1 && inodes[0] == rootDir && isReservedName(child)) {
+      throw new HadoopIllegalArgumentException(
+          "File name \"" + child.getLocalName() + "\" is reserved and cannot "
+              + "be created. If this is during upgrade change the name of the "
+              + "existing file or directory to another name before upgrading "
+              + "to the new release.");
+    }
+    // The filesystem limits are not really quotas, so this check may appear
+    // odd. It's because a rename operation deletes the src, tries to add
+    // to the dest, if that fails, re-adds the src from whence it came.
+    // The rename code disables the quota when it's restoring to the
+    // original location becase a quota violation would cause the the item
+    // to go "poof".  The fs limits must be bypassed for the same reason.
+    
+    // TODO
+    /*if (checkQuota) {
+      verifyMaxComponentLength(child.getLocalNameBytes(), inodes, pos);
+      verifyMaxDirItems(inodes, pos);
+    }
+    // always verify inode name
+    verifyINodeName(child.getLocalNameBytes());
+    
+    final Quota.Counts counts = child.computeQuotaUsage();
+    updateCount(iip, pos,
+        counts.get(Quota.NAMESPACE), counts.get(Quota.DISKSPACE), checkQuota);*/
+    boolean isRename = (child.getParent() != null);
+    NameNode.LOG.info("--- MPSR ---: addChildMpsr() : Getting parent [pos = '" + pos + ", iip = '" + iip.toString() + "''].");
+
+    final INodeUnderlyingDirectory parent = (INodeUnderlyingDirectory) inodes[pos-1];
+    boolean added;
+    try {
+      added = parent.addChild(child, true, iip.getLatestSnapshotId());
+    } catch (QuotaExceededException e) {
+      /*updateCountNoQuotaCheck(iip, pos,
+          -counts.get(Quota.NAMESPACE), -counts.get(Quota.DISKSPACE));*/
+      throw e;
+    }
+    if (!added) {
+      /*updateCountNoQuotaCheck(iip, pos,
+          -counts.get(Quota.NAMESPACE), -counts.get(Quota.DISKSPACE));*/
+    } else {
+      iip.setINode(pos - 1, child.getParent());
+      if (!isRename) {
+        AclStorage.copyINodeDefaultAcl(child);
+      }
+      addToInodeMap(child);
+    }
+    return added;
+  }
+  
+  
+  
+  
+  
+  
+  
   
   private boolean addLastINodeNoQuotaCheck(INodesInPath inodesInPath, INode i) {
     try {
@@ -3331,4 +3561,24 @@ public class FSDirectory implements Closeable {
     }
     return inodesInPath;
   }
+  
+  
+  
+  /**
+   * @return the INodesInPath of the components in src
+   * @throws UnresolvedLinkException if symlink can't be resolved
+   * @throws SnapshotAccessControlException if path is in RO snapshot
+   */
+  //serhiy
+  /*INodesInPath [] getINodesInPath4WriteMpsr(String src, boolean resolveLink)
+          throws UnresolvedLinkException, SnapshotAccessControlException {
+    final byte[][] components = INode.getPathComponents(src);
+    INodesInPath [] inodesInPath = INodesInPath.resolve(rootDir, components,
+            components.length, resolveLink);
+    if (inodesInPath.isSnapshot()) {
+      throw new SnapshotAccessControlException(
+              "Modification on a read-only snapshot is disallowed");
+    }
+    return inodesInPath;
+  }*/
 }

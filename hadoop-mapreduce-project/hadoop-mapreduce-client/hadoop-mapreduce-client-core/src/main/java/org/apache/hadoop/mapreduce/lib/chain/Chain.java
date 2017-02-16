@@ -601,7 +601,7 @@ public class Chain {
   /**
    * Adds a Mapper class to the chain job.
    * 
-   * <p/>
+   * 
    * The configuration properties of the chain job have precedence over the
    * configuration properties of the Mapper.
    * 
@@ -739,7 +739,7 @@ public class Chain {
   /**
    * Sets the Reducer class to the chain job.
    * 
-   * <p/>
+   * 
    * The configuration properties of the chain job have precedence over the
    * configuration properties of the Reducer.
    * 

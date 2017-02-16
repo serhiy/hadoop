@@ -28,7 +28,7 @@ import org.apache.hadoop.yarn.util.Records;
  * information needed by the <code>NodeManager</code> to handle
  * the logs for an application.</p>
  *
- * <p>It includes details such as:
+ * It includes details such as:
  *   <ul>
  *     <li>includePattern. It uses Java Regex to filter the log files
  *     which match the defined include pattern and those log files
@@ -47,7 +47,7 @@ import org.apache.hadoop.yarn.util.Records;
  *     name matches both the include and the exclude pattern, this file
  *     will be excluded eventually</li>
  *   </ul>
- * </p>
+ * 
  *
  * @see ApplicationSubmissionContext
  */

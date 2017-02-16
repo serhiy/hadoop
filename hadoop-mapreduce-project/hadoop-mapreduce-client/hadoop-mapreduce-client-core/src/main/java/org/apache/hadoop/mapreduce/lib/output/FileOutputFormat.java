@@ -181,18 +181,16 @@ public static final String OUTDIR = "mapreduce.output.fileoutputformat.outputdir
    *  Get the {@link Path} to the task's temporary output directory 
    *  for the map-reduce job
    *  
-   * <h4 id="SideEffectFiles">Tasks' Side-Effect Files</h4>
-   * 
    * <p>Some applications need to create/write-to side-files, which differ from
    * the actual job-outputs.
    * 
-   * <p>In such cases there could be issues with 2 instances of the same TIP 
+   * In such cases there could be issues with 2 instances of the same TIP 
    * (running simultaneously e.g. speculative tasks) trying to open/write-to the
    * same file (path) on HDFS. Hence the application-writer will have to pick 
    * unique names per task-attempt (e.g. using the attemptid, say 
-   * <tt>attempt_200709221812_0001_m_000000_0</tt>), not just per TIP.</p> 
+   * <tt>attempt_200709221812_0001_m_000000_0</tt>), not just per TIP. 
    * 
-   * <p>To get around this the Map-Reduce framework helps the application-writer 
+   * To get around this the Map-Reduce framework helps the application-writer 
    * out by maintaining a special 
    * <tt>${mapreduce.output.fileoutputformat.outputdir}/_temporary/_${taskid}</tt> 
    * sub-directory for each task-attempt on HDFS where the output of the 
@@ -200,18 +198,18 @@ public static final String OUTDIR = "mapreduce.output.fileoutputformat.outputdir
    * in the <tt>${mapreduce.output.fileoutputformat.outputdir}/_temporary/_${taskid}</tt> (only) 
    * are <i>promoted</i> to <tt>${mapreduce.output.fileoutputformat.outputdir}</tt>. Of course, the 
    * framework discards the sub-directory of unsuccessful task-attempts. This 
-   * is completely transparent to the application.</p>
+   * is completely transparent to the application.
    * 
-   * <p>The application-writer can take advantage of this by creating any 
+   * The application-writer can take advantage of this by creating any 
    * side-files required in a work directory during execution 
    * of his task i.e. via 
    * {@link #getWorkOutputPath(TaskInputOutputContext)}, and
    * the framework will move them out similarly - thus she doesn't have to pick 
-   * unique paths per task-attempt.</p>
+   * unique paths per task-attempt.
    * 
-   * <p>The entire discussion holds true for maps of jobs with 
+   * The entire discussion holds true for maps of jobs with 
    * reducer=NONE (i.e. 0 reduces) since output of the map, in that case, 
-   * goes directly to HDFS.</p> 
+   * goes directly to HDFS.
    * 
    * @return the {@link Path} to the task's temporary output directory 
    * for the map-reduce job.

@@ -35,7 +35,7 @@ import org.apache.hadoop.yarn.util.Records;
  * is always on a single node and has a unique {@link ContainerId}. It has
  * a specific amount of {@link Resource} allocated.</p>
  * 
- * <p>It includes details such as:
+ * It includes details such as:
  *   <ul>
  *     <li>{@link ContainerId} for the container, which is globally unique.</li>
  *     <li>
@@ -49,7 +49,7 @@ import org.apache.hadoop.yarn.util.Records;
  *       authenticity of the allocation. 
  *     </li>
  *   </ul>
- * </p>
+ * 
  * 
  * <p>Typically, an <code>ApplicationMaster</code> receives the 
  * <code>Container</code> from the <code>ResourceManager</code> during

@@ -188,7 +188,34 @@ class BPOfferService {
       readUnlock();
     }
   }
+  
+  
+  
+  
+  
+  
+  //serhiy
+  
+  public PartitioningTypeInfo partitioningTypeInfo() {
+	  readLock();
+	    try {
+	      return getBPServiceActors().get(0).bpNamenode.partitioningTypeRequest();
+	    } catch (IOException e) {
+			LOG.error(e);
+		} finally {
+	      readUnlock();
+	    }
+	    return null;
+  }
 
+  
+  
+  
+  
+  
+  
+  
+  
   @Override
   public String toString() {
     readLock();

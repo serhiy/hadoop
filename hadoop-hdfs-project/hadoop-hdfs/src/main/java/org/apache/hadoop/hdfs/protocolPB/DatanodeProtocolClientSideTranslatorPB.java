@@ -45,6 +45,7 @@ import org.apache.hadoop.hdfs.protocol.proto.DatanodeProtocolProtos.RegisterData
 import org.apache.hadoop.hdfs.protocol.proto.DatanodeProtocolProtos.ReportBadBlocksRequestProto;
 import org.apache.hadoop.hdfs.protocol.proto.DatanodeProtocolProtos.StorageBlockReportProto;
 import org.apache.hadoop.hdfs.protocol.proto.DatanodeProtocolProtos.StorageReceivedDeletedBlocksProto;
+import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.PartitioningTypeRequestProto;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.VersionRequestProto;
 import org.apache.hadoop.hdfs.server.protocol.BlockReportContext;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeCommand;
@@ -52,6 +53,7 @@ import org.apache.hadoop.hdfs.server.protocol.DatanodeProtocol;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeRegistration;
 import org.apache.hadoop.hdfs.server.protocol.HeartbeatResponse;
 import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
+import org.apache.hadoop.hdfs.server.protocol.PartitioningTypeInfo;
 import org.apache.hadoop.hdfs.server.protocol.ReceivedDeletedBlockInfo;
 import org.apache.hadoop.hdfs.server.protocol.StorageBlockReport;
 import org.apache.hadoop.hdfs.server.protocol.StorageReceivedDeletedBlocks;
@@ -81,6 +83,9 @@ public class DatanodeProtocolClientSideTranslatorPB implements
   private final DatanodeProtocolPB rpcProxy;
   private static final VersionRequestProto VOID_VERSION_REQUEST = 
       VersionRequestProto.newBuilder().build();
+  //serhiy
+  private static final PartitioningTypeRequestProto VOID_PARTITIONING_TYPE_REQUEST = 
+		  PartitioningTypeRequestProto.newBuilder().build();
   private final static RpcController NULL_CONTROLLER = null;
   
   public DatanodeProtocolClientSideTranslatorPB(InetSocketAddress nameNodeAddr,
@@ -251,6 +256,33 @@ public class DatanodeProtocolClientSideTranslatorPB implements
       throw ProtobufHelper.getRemoteException(e);
     }
   }
+  
+  
+  
+  
+  
+  
+  
+  
+  //serhiy
+  @Override
+  public PartitioningTypeInfo partitioningTypeRequest() throws IOException {
+	  try {
+	      return PBHelper.convert(rpcProxy.partitioningTypeRequest(NULL_CONTROLLER,
+	          VOID_PARTITIONING_TYPE_REQUEST).getInfo());
+	    } catch (ServiceException e) {
+	      throw ProtobufHelper.getRemoteException(e);
+	    }
+  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
 
   @Override
   public void reportBadBlocks(LocatedBlock[] blocks) throws IOException {

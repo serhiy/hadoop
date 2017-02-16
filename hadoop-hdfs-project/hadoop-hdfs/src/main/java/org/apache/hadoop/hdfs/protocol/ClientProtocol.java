@@ -228,6 +228,11 @@ public interface ClientProtocol {
       throws AccessControlException, DSQuotaExceededException,
       FileNotFoundException, SafeModeException, UnresolvedLinkException,
       SnapshotAccessControlException, IOException;
+  
+  
+  //serhiy
+  public LocatedBlock[] appendMpsr(String src, String clientName) throws IOException;
+  
 
   /**
    * Set replication for an existing file.

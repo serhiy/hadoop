@@ -54,7 +54,6 @@ public class DatanodeInfo extends DatanodeID implements Node {
   private String softwareVersion;
   private List<String> dependentHostNames = new LinkedList<String>();
   
-  
   // Datanode administrative states
   public enum AdminStates {
     NORMAL("In Service"), 

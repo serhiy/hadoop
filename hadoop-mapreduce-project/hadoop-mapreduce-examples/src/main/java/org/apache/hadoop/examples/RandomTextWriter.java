@@ -42,31 +42,31 @@ import org.apache.hadoop.util.ToolRunner;
  * random sequence of words.
  * In order for this program to generate data for terasort with a 5-10 words
  * per key and 20-100 words per value, have the following config:
- * <xmp>
- * <?xml version="1.0"?>
- * <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
- * <configuration>
- *   <property>
- *     <name>mapreduce.randomtextwriter.minwordskey</name>
- *     <value>5</value>
- *   </property>
- *   <property>
- *     <name>mapreduce.randomtextwriter.maxwordskey</name>
- *     <value>10</value>
- *   </property>
- *   <property>
- *     <name>mapreduce.randomtextwriter.minwordsvalue</name>
- *     <value>20</value>
- *   </property>
- *   <property>
- *     <name>mapreduce.randomtextwriter.maxwordsvalue</name>
- *     <value>100</value>
- *   </property>
- *   <property>
- *     <name>mapreduce.randomtextwriter.totalbytes</name>
- *     <value>1099511627776</value>
- *   </property>
- * </configuration></xmp>
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ *  
+ *  
+ * 
+ * 
  * 
  * Equivalently, {@link RandomTextWriter} also supports all the above options
  * and ones supported by {@link Tool} via the command-line.

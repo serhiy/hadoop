@@ -162,6 +162,7 @@ import org.apache.hadoop.hdfs.server.protocol.DatanodeProtocol;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeRegistration;
 import org.apache.hadoop.hdfs.server.protocol.InterDatanodeProtocol;
 import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
+import org.apache.hadoop.hdfs.server.protocol.PartitioningTypeInfo;
 import org.apache.hadoop.hdfs.server.protocol.ReplicaRecoveryInfo;
 import org.apache.hadoop.hdfs.web.WebHdfsFileSystem;
 import org.apache.hadoop.hdfs.web.resources.Param;
@@ -1170,6 +1171,17 @@ public class DataNode extends ReconfigurableBase
   private synchronized void checkDatanodeUuid() throws IOException {
     if (storage.getDatanodeUuid() == null) {
       storage.setDatanodeUuid(generateUuid());
+      
+      
+      //serhiy
+      BPOfferService bpOfferService = blockPoolManager.getAllNamenodeThreads()[0];
+      PartitioningTypeInfo partitioningTypeInfo = bpOfferService.partitioningTypeInfo();
+      storage.setPartitioningType(partitioningTypeInfo.getpType());
+      
+      
+      
+      
+      
       storage.writeAll();
       LOG.info("Generated and persisted new Datanode UUID " +
                storage.getDatanodeUuid());
@@ -3066,6 +3078,11 @@ public class DataNode extends ReconfigurableBase
   public String getDatanodeUuid() {
     return id == null ? null : id.getDatanodeUuid();
   }
+  
+  public Integer getParitioningType() {
+	    return id == null ? null : id.getPartitioningType();
+  }
+
 
   boolean shouldRun() {
     return shouldRun;

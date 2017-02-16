@@ -72,7 +72,7 @@ import org.apache.hadoop.io.compress.CompressionCodec;
  * to the {@link FileSystem} without grouping by keys.</p>
  * 
  * <p>Example:</p>
- * <p><blockquote><pre>
+ * 
  *     public class MyMapper&lt;K extends WritableComparable, V extends Writable&gt; 
  *     extends MapReduceBase implements Mapper&lt;K, V, K, V&gt; {
  *     
@@ -117,7 +117,7 @@ import org.apache.hadoop.io.compress.CompressionCodec;
  *         output.collect(key, val);
  *       }
  *     }
- * </pre></blockquote></p>
+ * 
  *
  * <p>Applications may write a custom {@link MapRunnable} to exert greater
  * control on map processing e.g. multi-threaded <code>Mapper</code>s etc.</p>

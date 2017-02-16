@@ -33,7 +33,11 @@ public abstract class Verifier extends RpcAuthInfo {
     super(flavor);
   }
 
-  /** Read both AuthFlavor and the verifier from the XDR */
+  /**
+   * Read both AuthFlavor and the verifier from the XDR
+   * @param xdr
+   * @return
+   */
   public static Verifier readFlavorAndVerifier(XDR xdr) {
     AuthFlavor flavor = AuthFlavor.fromValue(xdr.readInt());
     final Verifier verifer;
@@ -50,7 +54,9 @@ public abstract class Verifier extends RpcAuthInfo {
   }
   
   /**
-   * Write AuthFlavor and the verifier to the XDR
+     * Write AuthFlavor and the verifier to the XDR
+   * @param verifier
+   * @param xdr
    */
   public static void writeFlavorAndVerifier(Verifier verifier, XDR xdr) {
     if (verifier instanceof VerifierNone) {

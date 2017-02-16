@@ -37,7 +37,7 @@ import org.apache.hadoop.yarn.util.Records;
  * information needed by the <code>ResourceManager</code> to launch 
  * the <code>ApplicationMaster</code> for an application.</p>
  * 
- * <p>It includes details such as:
+ * It includes details such as:
  *   <ul>
  *     <li>{@link ApplicationId} of the application.</li>
  *     <li>Application user.</li>
@@ -51,14 +51,14 @@ import org.apache.hadoop.yarn.util.Records;
  *     It should be no larger than the global number of max attempts in the
  *     Yarn configuration.</li>
  *     <li>attemptFailuresValidityInterval. The default value is -1.
- *     when attemptFailuresValidityInterval in milliseconds is set to > 0,
+ *     when attemptFailuresValidityInterval in milliseconds is set to bigger than 0,
  *     the failure number will no take failures which happen out of the
  *     validityInterval into failure count. If failure count reaches to
  *     maxAppAttempts, the application will be failed.
  *     </li>
  *   <li>Optional, application-specific {@link LogAggregationContext}</li>
  *   </ul>
- * </p>
+ * 
  * 
  * @see ContainerLaunchContext
  * @see ApplicationClientProtocol#submitApplication(org.apache.hadoop.yarn.api.protocolrecords.SubmitApplicationRequest)

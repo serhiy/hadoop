@@ -76,8 +76,8 @@ public abstract class StartContainerRequest {
   /**
    * <p>Get the container token to be used for authorization during starting
    * container.</p>
-   * <p>Note: {@link NMToken} will be used for authenticating communication with </code>
-   * NodeManager</code>.</p>
+   * Note: {@link NMToken} will be used for authenticating communication with <code>
+   * NodeManager</code>.
    * @return the container token to be used for authorization during starting
    * container.
    * @see NMToken

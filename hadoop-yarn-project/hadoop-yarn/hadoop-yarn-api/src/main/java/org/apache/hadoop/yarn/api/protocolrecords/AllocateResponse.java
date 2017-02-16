@@ -42,7 +42,7 @@ import org.apache.hadoop.yarn.util.Records;
  * <p>The response sent by the <code>ResourceManager</code> the  
  * <code>ApplicationMaster</code> during resource negotiation.</p>
  *
- * <p>The response, includes:
+ * The response, includes:
  *   <ul>
  *     <li>Response ID to track duplicate responses.</li>
  *     <li>
@@ -59,7 +59,7 @@ import org.apache.hadoop.yarn.util.Records;
  *     <li>A description of resources requested back by the cluster</li>
  *     <li>AMRMToken, if AMRMToken has been rolled over</li>
  *   </ul>
- * </p>
+ * 
  * 
  * @see ApplicationMasterProtocol#allocate(AllocateRequest)
  */
@@ -223,13 +223,13 @@ public abstract class AllocateResponse {
    * <p>Get the description of containers owned by the AM, but requested back by
    * the cluster. Note that the RM may have an inconsistent view of the
    * resources owned by the AM. These messages are advisory, and the AM may
-   * elect to ignore them.<p>
+   * elect to ignore them.</p>
    *
    * <p>The message is a snapshot of the resources the RM wants back from the AM.
    * While demand persists, the RM will repeat its request; applications should
-   * not interpret each message as a request for <em>additional<em>
+   * not interpret each message as a request for additional
    * resources on top of previous messages. Resources requested consistently
-   * over some duration may be forcibly killed by the RM.<p>
+   * over some duration may be forcibly killed by the RM.</p>
    *
    * @return A specification of the resources to reclaim from this AM.
    */

@@ -93,6 +93,17 @@ public class INodesInPath {
       final byte[][] components) throws UnresolvedLinkException {
     return resolve(startingDir, components, components.length, false);
   }
+  
+  
+  
+  
+  // serhiy
+  static INodesInPath resolveMpsr(final INodeDirectory startingDir,
+	      final byte[][] components, String src, int partitioningType) throws UnresolvedLinkException {
+	    return resolveMpsr(startingDir, components, src, components.length, false, partitioningType);
+	  }
+  
+  
 
   /**
    * Retrieve existing INodes from a path. If existing is big enough to store
@@ -244,6 +255,215 @@ public class INodesInPath {
     }
     return existing;
   }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  /**
+   * Retrieve existing INodes from a path. If existing is big enough to store
+   * all path components (existing and non-existing), then existing INodes
+   * will be stored starting from the root INode into existing[0]; if
+   * existing is not big enough to store all path components, then only the
+   * last existing and non existing INodes will be stored so that
+   * existing[existing.length-1] refers to the INode of the final component.
+   * 
+   * An UnresolvedPathException is always thrown when an intermediate path 
+   * component refers to a symbolic link. If the final path component refers 
+   * to a symbolic link then an UnresolvedPathException is only thrown if
+   * resolveLink is true.  
+   * 
+   * <p>
+   * Example: <br>
+   * Given the path /c1/c2/c3 where only /c1/c2 exists, resulting in the
+   * following path components: ["","c1","c2","c3"],
+   * 
+   * <p>
+   * <code>getExistingPathINodes(["","c1","c2"], [?])</code> should fill the
+   * array with [c2] <br>
+   * <code>getExistingPathINodes(["","c1","c2","c3"], [?])</code> should fill the
+   * array with [null]
+   * 
+   * <p>
+   * <code>getExistingPathINodes(["","c1","c2"], [?,?])</code> should fill the
+   * array with [c1,c2] <br>
+   * <code>getExistingPathINodes(["","c1","c2","c3"], [?,?])</code> should fill
+   * the array with [c2,null]
+   * 
+   * <p>
+   * <code>getExistingPathINodes(["","c1","c2"], [?,?,?,?])</code> should fill
+   * the array with [rootINode,c1,c2,null], <br>
+   * <code>getExistingPathINodes(["","c1","c2","c3"], [?,?,?,?])</code> should
+   * fill the array with [rootINode,c1,c2,null]
+   * 
+   * @param startingDir the starting directory
+   * @param components array of path component name
+   * @param numOfINodes number of INodes to return
+   * @param resolveLink indicates whether UnresolvedLinkException should
+   *        be thrown when the path refers to a symbolic link.
+   * @param partitioning type
+   * @return the specified number of existing INodes in the path
+   */
+  // serhiy
+  static INodesInPath resolveMpsr(final INodeDirectory startingDir,
+      final byte[][] components, String src, final int numOfINodes, 
+      final boolean resolveLink, int partitioningType) throws UnresolvedLinkException {
+    Preconditions.checkArgument(startingDir.compareTo(components[0]) == 0);
+
+    INode curNode = startingDir.getUnderlyingDirectory(partitioningType);
+    final INodesInPath existing = new INodesInPath(components, numOfINodes);
+    int count = 0;
+    int index = 0;
+    boolean changed = true;
+    /*int index = numOfINodes - components.length;
+    if (index > 0) {
+      index = 0;
+    }*/
+    LOG.info("--- MPSR ---: resolveMpsr(): Resolving path. [path = '" + src + "', partitioningType = '" + partitioningType + "']");
+    while (count < components.length && curNode != null) {
+      final boolean lastComp = (count == components.length - 1);      
+      if (index >= 0 && changed) {
+        existing.addNode(curNode);
+        changed = false;
+      }
+      //final boolean isRef = curNode.isReference();
+      final boolean isUDir = (curNode instanceof INodeUnderlyingDirectory);
+      final INodeUnderlyingDirectory dir = isUDir? (INodeUnderlyingDirectory) curNode: null;  
+      /*if (!isRef && isDir && dir.isWithSnapshot()) {
+        //if the path is a non-snapshot path, update the latest snapshot.
+        if (!existing.isSnapshot()) {
+          existing.updateLatestSnapshotId(dir.getDirectoryWithSnapshotFeature()
+              .getLastSnapshotId());
+        }
+      } else if (isRef && isDir && !lastComp) {
+        // If the curNode is a reference node, need to check its dstSnapshot:
+        // 1. if the existing snapshot is no later than the dstSnapshot (which
+        // is the latest snapshot in dst before the rename), the changes 
+        // should be recorded in previous snapshots (belonging to src).
+        // 2. however, if the ref node is already the last component, we still 
+        // need to know the latest snapshot among the ref node's ancestors, 
+        // in case of processing a deletion operation. Thus we do not overwrite
+        // the latest snapshot if lastComp is true. In case of the operation is
+        // a modification operation, we do a similar check in corresponding 
+        // recordModification method.
+        if (!existing.isSnapshot()) {
+          int dstSnapshotId = curNode.asReference().getDstSnapshotId();
+          int latest = existing.getLatestSnapshotId();
+          if (latest == Snapshot.CURRENT_STATE_ID || // no snapshot in dst tree of rename
+              (dstSnapshotId != Snapshot.CURRENT_STATE_ID && 
+                dstSnapshotId >= latest)) { // the above scenario 
+            int lastSnapshot = Snapshot.CURRENT_STATE_ID;
+            DirectoryWithSnapshotFeature sf = null;
+            if (curNode.isDirectory() && 
+                (sf = curNode.asDirectory().getDirectoryWithSnapshotFeature()) != null) {
+              lastSnapshot = sf.getLastSnapshotId();
+            }
+            existing.setSnapshotId(lastSnapshot);
+          }
+        }
+      }*/
+      /*if (curNode.isSymlink() && (!lastComp || (lastComp && resolveLink))) {
+        final String path = constructPath(components, 0, components.length);
+        final String preceding = constructPath(components, 0, count);
+        final String remainder =
+          constructPath(components, count + 1, components.length);
+        final String link = DFSUtil.bytes2String(components[count]);
+        final String target = curNode.asSymlink().getSymlinkString();
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("UnresolvedPathException " +
+            " path: " + path + " preceding: " + preceding +
+            " count: " + count + " link: " + link + " target: " + target +
+            " remainder: " + remainder);
+        }
+        throw new UnresolvedPathException(path, preceding, remainder, target);
+      }*/
+      if (lastComp || !isUDir) {
+        break;
+      }
+      final byte[] childName = components[count + 1];
+      
+      /*// check if the next byte[] in components is for ".snapshot"
+      if (isDotSnapshotDir(childName) && isDir && dir.isSnapshottable()) {
+        // skip the ".snapshot" in components
+        count++;
+        index++;
+        existing.isSnapshot = true;
+        if (index >= 0) { // decrease the capacity by 1 to account for .snapshot
+          existing.capacity--;
+        }
+        // check if ".snapshot" is the last element of components
+        if (count == components.length - 1) {
+          break;
+        }
+        // Resolve snapshot root
+        final Snapshot s = dir.getSnapshot(components[count + 1]);
+        if (s == null) {
+          //snapshot not found
+          curNode = null;
+        } else {
+          curNode = s.getRoot();
+          existing.setSnapshotId(s.getId());
+        }
+        if (index >= -1) {
+          existing.snapshotRootIndex = existing.numNonNull;
+        }
+      } else {
+        // normal case, and also for resolving file/dir under snapshot root
+        curNode = dir.getChild(childName, existing.getPathSnapshotId());
+      }*/
+      
+      INode child = dir.getChild(childName, existing.getPathSnapshotId());
+      if (child != null) {
+    	  curNode = child;
+    	  changed = true;
+    	  LOG.info("--- MPSR ---: resolveMpsr(): Child found! [curNode = '" + curNode.getLocalName() + "', child = '" + DFSUtil.bytes2String(childName) + "']");
+      } else {
+    	  LOG.info("--- MPSR ---: resolveMpsr(): Child NOT found! [curNode = '" + curNode.getLocalName() + "', child = '" + DFSUtil.bytes2String(childName) + "']");
+      }
+      
+      count++;
+      index++;
+    }
+
+    LOG.info("--- MPSR ---: resolveMpsr(): Path resolved. [path = '" + existing.toString(false) + "']");
+    
+    return existing;
+  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
 
   private final byte[][] path;
   /**
@@ -401,9 +621,9 @@ public class INodesInPath {
   }
 
   private String toString(boolean vaildateObject) {
-    if (vaildateObject) {
+    /*if (vaildateObject) {
       vaildate();
-    }
+    }*/
 
     final StringBuilder b = new StringBuilder(getClass().getSimpleName())
         .append(": path = ").append(DFSUtil.byteArray2PathString(path))

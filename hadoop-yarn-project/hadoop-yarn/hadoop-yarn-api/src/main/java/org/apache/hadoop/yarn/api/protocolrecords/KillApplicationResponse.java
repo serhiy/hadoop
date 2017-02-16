@@ -30,7 +30,7 @@ import org.apache.hadoop.yarn.util.Records;
  * The response sent by the <code>ResourceManager</code> to the client aborting
  * a submitted application.
  * </p>
- * <p>
+ * 
  * The response, includes:
  * <ul>
  * <li>A flag which indicates that the process of killing the application is
@@ -40,7 +40,7 @@ import org.apache.hadoop.yarn.util.Records;
  * the <code>ResourceManager</code> crashes before the process of killing the
  * application is completed, the <code>ResourceManager</code> may retry this
  * application on recovery.
- * </p>
+ * 
  * 
  * @see ApplicationClientProtocol#forceKillApplication(KillApplicationRequest)
  */

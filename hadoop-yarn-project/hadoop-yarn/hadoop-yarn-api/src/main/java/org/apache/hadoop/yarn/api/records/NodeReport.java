@@ -31,7 +31,7 @@ import org.apache.hadoop.yarn.util.Records;
  * <p><code>NodeReport</code> is a summary of runtime information of a 
  * node in the cluster.</p>
  * 
- * <p>It includes details such as:
+ * It includes details such as:
  *   <ul>
  *     <li>{@link NodeId} of the node.</li>
  *     <li>HTTP Tracking URL of the node.</li>
@@ -40,7 +40,7 @@ import org.apache.hadoop.yarn.util.Records;
  *     <li>Total available {@link Resource} of the node.</li>
  *     <li>Number of running containers on the node.</li>
  *   </ul>
- * </p>
+ * 
  *
  * @see ApplicationClientProtocol#getClusterNodes(org.apache.hadoop.yarn.api.protocolrecords.GetClusterNodesRequest)
  */

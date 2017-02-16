@@ -19,7 +19,7 @@
 /**
  * Basic services for the YARN registry
  * <ul>
- *   <li>The {@link org.apache.hadoop.registry.server.services.RegistryAdminService}</ol>
+ *   <li>The {@link org.apache.hadoop.registry.server.services.RegistryAdminService}
  *   extends the shared Yarn Registry client with registry setup and
  *   (potentially asynchronous) administrative actions.
  *   </li>

@@ -53,7 +53,7 @@ import org.apache.hadoop.yarn.api.records.ReservationId;
  * job via {@link Job} and then submits the job and monitor its progress.</p>
  * 
  * <p>Here is an example on how to submit a job:</p>
- * <p><blockquote><pre>
+ * 
  *     // Create a new Job
  *     Job job = Job.getInstance();
  *     job.setJarByClass(MyJob.class);
@@ -69,7 +69,7 @@ import org.apache.hadoop.yarn.api.records.ReservationId;
  *
  *     // Submit the job, then poll for progress until the job is complete
  *     job.waitForCompletion(true);
- * </pre></blockquote></p>
+ * 
  * 
  * 
  */

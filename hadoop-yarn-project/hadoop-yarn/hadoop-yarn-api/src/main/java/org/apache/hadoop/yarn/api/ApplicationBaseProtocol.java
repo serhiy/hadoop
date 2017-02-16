@@ -87,7 +87,7 @@ public interface ApplicationBaseProtocol {
    * {@link ApplicationReport} for the application.
    * </p>
    *
-   * <p>
+   * 
    * If the user does not have <code>VIEW_APP</code> access then the following
    * fields in the report will be set to stubbed values:
    * <ul>
@@ -99,7 +99,7 @@ public interface ApplicationBaseProtocol {
    * <li>original tracking URL - set to "N/A"</li>
    * <li>resource usage report - all values are -1</li>
    * </ul>
-   * </p>
+   * 
    *
    * @param request
    *          request for an application report
@@ -171,7 +171,7 @@ public interface ApplicationBaseProtocol {
    * the {@link ApplicationAttemptReport} for the application attempt.
    * </p>
    *
-   * <p>
+   * 
    * If the user does not have <code>VIEW_APP</code> access then the following
    * fields in the report will be set to stubbed values:
    * <ul>
@@ -181,7 +181,7 @@ public interface ApplicationBaseProtocol {
    * <li>diagnostics - set to "N/A"</li>
    * <li>tracking URL</li>
    * </ul>
-   * </p>
+   * 
    *
    * @param request
    *          request for an application attempt report

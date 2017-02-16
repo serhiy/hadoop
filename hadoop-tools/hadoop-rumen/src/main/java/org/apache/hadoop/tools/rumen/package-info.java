@@ -41,7 +41,7 @@
  *        String conf_filename = .. // assume the job configuration filename here
  *        
  *        // construct a list of interesting properties
- *        List<String> interestedProperties = new ArrayList<String>();
+ *        List interestedProperties = new ArrayList();
  *        interestedProperties.add("mapreduce.job.name");
  *        
  *        JobConfigurationParser jcp = 
@@ -154,7 +154,7 @@
  *        TopologyBuilder tb = new TopologyBuilder();
  *        
  *        // construct a list of interesting properties
- *        List<String> interestingProperties = new ArrayList<Strng>();
+ *        List interestingProperties = new ArrayList();
  *        // add the interesting properties here
  *        interestingProperties.add("mapreduce.job.name");
  *        
@@ -207,7 +207,7 @@
  *        JobBuilder jb = new JobBuilder(jobID);
  *        
  *        // construct a list of interesting properties
- *        List<String> interestingProperties = new ArrayList<Strng>();
+ *        List interestingProperties = new ArrayList();
  *        // add the interesting properties here
  *        interestingProperties.add("mapreduce.job.name");
  *        
@@ -269,7 +269,7 @@
  *        TopologyBuilder tb = new TopologyBuilder();
  *        
  *        // construct a list of interesting properties
- *        List<String> interestingProperties = new ArrayList<Strng>();
+ *        List interestingProperties = new ArrayList();
  *        // add the interesting properties here
  *        interestingProperties.add("mapreduce.job.name");
  *        

@@ -45,7 +45,7 @@ import org.apache.hadoop.io.Writable;
  * );
  * </pre>
  * then we can read/write the tuples from/to the table with :
- * <p><pre>
+ * 
  * public class MyWritable implements Writable, DBWritable {
  *   // Some data     
  *   private int counter;
@@ -73,7 +73,7 @@ import org.apache.hadoop.io.Writable;
  *     timestamp = resultSet.getLong(2);
  *   } 
  * }
- * </pre></p>
+ * 
  */
 @InterfaceAudience.Public
 @InterfaceStability.Stable

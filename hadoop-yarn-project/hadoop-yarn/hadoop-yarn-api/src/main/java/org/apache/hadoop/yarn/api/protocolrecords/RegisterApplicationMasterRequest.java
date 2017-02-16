@@ -27,13 +27,13 @@ import org.apache.hadoop.yarn.util.Records;
  * <p>The request sent by the <code>ApplicationMaster</code> to 
  * <code>ResourceManager</code> on registration.</p>
  * 
- * <p>The registration includes details such as:
+ * The registration includes details such as:
  *   <ul>
  *     <li>Hostname on which the AM is running.</li>
  *     <li>RPC Port</li>
  *     <li>Tracking URL</li>
  *   </ul>
- * </p>
+ * 
  * 
  * @see ApplicationMasterProtocol#registerApplicationMaster(RegisterApplicationMasterRequest)
  */
@@ -85,7 +85,7 @@ public abstract class RegisterApplicationMasterRequest {
   /**
    * Get the <em>RPC port</em> on which the <code>ApplicationMaster</code> 
    * is responding. 
-   * @return the <em>RPC port<em> on which the <code>ApplicationMaster</code> is 
+   * @return the <em>RPC port</em> on which the <code>ApplicationMaster</code> is 
    *         responding
    */
   @Public
@@ -93,9 +93,9 @@ public abstract class RegisterApplicationMasterRequest {
   public abstract int getRpcPort();
   
   /**
-   * Set the <em>RPC port<em> on which the <code>ApplicationMaster</code> is 
+   * Set the <em>RPC port</em> on which the <code>ApplicationMaster</code> is 
    * responding.
-   * @param port <em>RPC port<em> on which the <code>ApplicationMaster</code> is 
+   * @param port <em>RPC port</em> on which the <code>ApplicationMaster</code> is 
    *             responding
    */
   @Public

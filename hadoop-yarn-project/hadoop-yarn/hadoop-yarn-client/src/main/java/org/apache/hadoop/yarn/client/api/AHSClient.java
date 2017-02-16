@@ -60,12 +60,12 @@ public abstract class AHSClient extends AbstractService {
    * Get a report of the given Application.
    * </p>
    * 
-   * <p>
+   * 
    * In secure mode, <code>YARN</code> verifies access to the application, queue
    * etc. before accepting the request.
-   * </p>
    * 
-   * <p>
+   * 
+   * 
    * If the user does not have <code>VIEW_APP</code> access then the following
    * fields in the report will be set to stubbed values:
    * <ul>
@@ -77,7 +77,7 @@ public abstract class AHSClient extends AbstractService {
    * <li>original tracking URL - set to "N/A"</li>
    * <li>resource usage report - all values are -1</li>
    * </ul>
-   * </p>
+   * 
    * 
    * @param appId
    *          {@link ApplicationId} of the application that needs a report
@@ -93,11 +93,11 @@ public abstract class AHSClient extends AbstractService {
    * Get a report (ApplicationReport) of all Applications in the cluster.
    * </p>
    * 
-   * <p>
+   * 
    * If the user does not have <code>VIEW_APP</code> access for an application
    * then the corresponding report will be filtered as described in
    * {@link #getApplicationReport(ApplicationId)}.
-   * </p>
+   * 
    * 
    * @return a list of reports for all applications
    * @throws YarnException
@@ -111,17 +111,17 @@ public abstract class AHSClient extends AbstractService {
    * Get a report of the given ApplicationAttempt.
    * </p>
    * 
-   * <p>
+   * 
    * In secure mode, <code>YARN</code> verifies access to the application, queue
    * etc. before accepting the request.
-   * </p>
+   * 
    * 
    * @param applicationAttemptId
    *          {@link ApplicationAttemptId} of the application attempt that needs
    *          a report
    * @return application attempt report
    * @throws YarnException
-   * @throws {@link ApplicationAttemptNotFoundException} if application attempt
+   * @throws ApplicationAttemptNotFoundException if application attempt
    *         not found
    * @throws IOException
    */
@@ -148,16 +148,16 @@ public abstract class AHSClient extends AbstractService {
    * Get a report of the given Container.
    * </p>
    * 
-   * <p>
+   * 
    * In secure mode, <code>YARN</code> verifies access to the application, queue
    * etc. before accepting the request.
-   * </p>
+   * 
    * 
    * @param containerId
    *          {@link ContainerId} of the container that needs a report
    * @return container report
    * @throws YarnException
-   * @throws {@link ContainerNotFoundException} if container not found
+   * @throws ContainerNotFoundException if container not found
    * @throws IOException
    */
   public abstract ContainerReport getContainerReport(ContainerId containerId)

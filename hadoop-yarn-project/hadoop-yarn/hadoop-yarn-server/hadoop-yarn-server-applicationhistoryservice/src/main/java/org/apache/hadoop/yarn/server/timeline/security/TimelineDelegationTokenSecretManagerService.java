@@ -86,15 +86,6 @@ public class TimelineDelegationTokenSecretManagerService extends AbstractService
 
   /**
    * Create a timeline secret manager
-   * 
-   * @param delegationKeyUpdateInterval
-   *          the number of seconds for rolling new secret keys.
-   * @param delegationTokenMaxLifetime
-   *          the maximum lifetime of the delegation tokens
-   * @param delegationTokenRenewInterval
-   *          how often the tokens must be renewed
-   * @param delegationTokenRemoverScanInterval
-   *          how often the tokens are scanned for expired tokens
    */
   @Private
   @Unstable

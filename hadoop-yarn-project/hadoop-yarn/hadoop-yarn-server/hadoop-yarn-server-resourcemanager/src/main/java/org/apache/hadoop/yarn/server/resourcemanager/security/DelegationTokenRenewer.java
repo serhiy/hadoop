@@ -379,7 +379,6 @@ public class DelegationTokenRenewer extends AbstractService {
    * @param shouldCancelAtEnd true if tokens should be canceled when the app is
    * done else false. 
    * @param user user
-   * @throws IOException
    */
   public void addApplicationAsync(ApplicationId applicationId, Credentials ts,
       boolean shouldCancelAtEnd, String user) {

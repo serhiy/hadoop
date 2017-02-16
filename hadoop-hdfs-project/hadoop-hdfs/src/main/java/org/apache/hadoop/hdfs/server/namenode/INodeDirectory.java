@@ -21,6 +21,7 @@ import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +29,6 @@ import java.util.Map;
 import org.apache.hadoop.fs.PathIsNotDirectoryException;
 import org.apache.hadoop.fs.XAttr;
 import org.apache.hadoop.fs.permission.PermissionStatus;
-import org.apache.hadoop.hdfs.protocol.BlockStoragePolicy;
 import org.apache.hadoop.hdfs.DFSUtil;
 import org.apache.hadoop.hdfs.protocol.QuotaExceededException;
 import org.apache.hadoop.hdfs.protocol.SnapshotException;
@@ -68,6 +68,19 @@ public class INodeDirectory extends INodeWithAdditionalFields
   final static byte[] ROOT_NAME = DFSUtil.string2Bytes("");
 
   private List<INode> children = null;
+  
+  
+  //serhiy
+  private Map<Integer, INode> underlyingDirectories = new HashMap<Integer, INode>();
+
+  public INode getUnderlyingDirectory(int partitioningType) {
+	return underlyingDirectories.get(partitioningType);
+  }
+
+  public void addUnderlyingDirectory(int paritioningType, INode inode) {
+	underlyingDirectories.put(paritioningType, inode);
+  }
+
   
   /** constructor */
   public INodeDirectory(long id, byte[] name, PermissionStatus permissions,
@@ -131,6 +144,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
         BlockStoragePolicySuite.ID_UNSPECIFIED;
   }
 
+  //TODO: quota is not important right now
   void setQuota(long nsQuota, long dsQuota) {
     DirectoryWithQuotaFeature quota = getDirectoryWithQuotaFeature();
     if (quota != null) {
@@ -146,12 +160,14 @@ public class INodeDirectory extends INodeWithAdditionalFields
     }
   }
 
+  //TODO: quota is not important right now
   @Override
   public Quota.Counts getQuotaCounts() {
     final DirectoryWithQuotaFeature q = getDirectoryWithQuotaFeature();
     return q != null? q.getQuota(): super.getQuotaCounts();
   }
 
+  //TODO: quota is not important right now
   @Override
   public void addSpaceConsumed(long nsDelta, long dsDelta, boolean verify) 
       throws QuotaExceededException {
@@ -167,15 +183,18 @@ public class INodeDirectory extends INodeWithAdditionalFields
    * If the directory contains a {@link DirectoryWithQuotaFeature}, return it;
    * otherwise, return null.
    */
+  //TODO: quota is not important right now
   public final DirectoryWithQuotaFeature getDirectoryWithQuotaFeature() {
     return getFeature(DirectoryWithQuotaFeature.class);
   }
 
   /** Is this directory with quota? */
+  //TODO: quota is not important right now
   final boolean isWithQuota() {
     return getDirectoryWithQuotaFeature() != null;
   }
 
+  //TODO: quota is not important right now
   DirectoryWithQuotaFeature addDirectoryWithQuotaFeature(
       long nsQuota, long dsQuota) {
     Preconditions.checkState(!isWithQuota(), "Directory is already with quota");
@@ -185,10 +204,12 @@ public class INodeDirectory extends INodeWithAdditionalFields
     return quota;
   }
 
+  //DONE
   int searchChildren(byte[] name) {
     return children == null? -1: Collections.binarySearch(children, name);
   }
   
+  //TODO: snapshot is not important right now
   public DirectoryWithSnapshotFeature addSnapshotFeature(
       DirectoryDiffList diffs) {
     Preconditions.checkState(!isWithSnapshot(), 
@@ -202,53 +223,64 @@ public class INodeDirectory extends INodeWithAdditionalFields
    * If feature list contains a {@link DirectoryWithSnapshotFeature}, return it;
    * otherwise, return null.
    */
+  //TODO: snapshot is not important right now
   public final DirectoryWithSnapshotFeature getDirectoryWithSnapshotFeature() {
     return getFeature(DirectoryWithSnapshotFeature.class);
   }
 
   /** Is this file has the snapshot feature? */
+  //TODO: snapshot is not important right now
   public final boolean isWithSnapshot() {
     return getDirectoryWithSnapshotFeature() != null;
   }
 
+  //TODO: snapshot is not important right now
   public DirectoryDiffList getDiffs() {
     DirectoryWithSnapshotFeature sf = getDirectoryWithSnapshotFeature();
     return sf != null ? sf.getDiffs() : null;
   }
   
   @Override
+  //TODO: snapshot is not important right now
   public INodeDirectoryAttributes getSnapshotINode(int snapshotId) {
     DirectoryWithSnapshotFeature sf = getDirectoryWithSnapshotFeature();
     return sf == null ? this : sf.getDiffs().getSnapshotINode(snapshotId, this);
   }
   
   @Override
+  //TODO: snapshot is not important right now
   public String toDetailString() {
     DirectoryWithSnapshotFeature sf = this.getDirectoryWithSnapshotFeature();
     return super.toDetailString() + (sf == null ? "" : ", " + sf.getDiffs()); 
   }
 
+  //TODO: snapshot is not important right now
   public DirectorySnapshottableFeature getDirectorySnapshottableFeature() {
     return getFeature(DirectorySnapshottableFeature.class);
   }
 
+  //TODO: snapshot is not important right now
   public boolean isSnapshottable() {
     return getDirectorySnapshottableFeature() != null;
   }
 
+  //TODO: snapshot is not important right now
   public Snapshot getSnapshot(byte[] snapshotName) {
     return getDirectorySnapshottableFeature().getSnapshot(snapshotName);
   }
 
+  //TODO: snapshot is not important right now
   public void setSnapshotQuota(int snapshotQuota) {
     getDirectorySnapshottableFeature().setSnapshotQuota(snapshotQuota);
   }
 
+  //TODO: snapshot is not important right now
   public Snapshot addSnapshot(int id, String name) throws SnapshotException,
       QuotaExceededException {
     return getDirectorySnapshottableFeature().addSnapshot(this, id, name);
   }
 
+  //TODO: snapshot is not important right now
   public Snapshot removeSnapshot(String snapshotName,
       BlocksMapUpdateInfo collectedBlocks, final List<INode> removedINodes)
       throws SnapshotException {
@@ -256,12 +288,14 @@ public class INodeDirectory extends INodeWithAdditionalFields
         snapshotName, collectedBlocks, removedINodes);
   }
 
+  //TODO: snapshot is not important right now
   public void renameSnapshot(String path, String oldName, String newName)
       throws SnapshotException {
     getDirectorySnapshottableFeature().renameSnapshot(path, oldName, newName);
   }
 
   /** add DirectorySnapshottableFeature */
+  //TODO: snapshot is not important right now
   public void addSnapshottableFeature() {
     Preconditions.checkState(!isSnapshottable(),
         "this is already snapshottable, this=%s", this);
@@ -275,6 +309,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
   }
 
   /** remove DirectorySnapshottableFeature */
+  //TODO: snapshot is not important right now
   public void removeSnapshottableFeature() {
     DirectorySnapshottableFeature s = getDirectorySnapshottableFeature();
     Preconditions.checkState(s != null,
@@ -294,6 +329,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
    * INodeDirectoryWithSnapshot or INodeFileUnderConstruction. The only cases
    * for child replacement is for reference nodes.
    */
+  //TODO: feature is not priority for prototype
   public void replaceChild(INode oldChild, final INode newChild,
       final INodeMap inodeMap) {
     Preconditions.checkNotNull(children);
@@ -324,6 +360,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
     }    
   }
 
+  //TODO: feature is not priority for prototype
   INodeReference.WithName replaceChild4ReferenceWithName(INode oldChild,
       int latestSnapshotId) {
     Preconditions.checkArgument(latestSnapshotId != Snapshot.CURRENT_STATE_ID);
@@ -346,6 +383,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
   }
 
   @Override
+  //TODO: feature is not priority for prototype
   public void recordModification(int latestSnapshotId)
       throws QuotaExceededException {
     if (isInLatestSnapshot(latestSnapshotId)
@@ -365,6 +403,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
    * 
    * @return the child inode, which may be replaced.
    */
+  //TODO: feature is not priority for prototype
   public INode saveChild2Snapshot(final INode child, final int latestSnapshotId,
       final INode snapshotCopy) throws QuotaExceededException {
     if (latestSnapshotId == Snapshot.CURRENT_STATE_ID) {
@@ -407,6 +446,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
    * children list nor in any snapshot; otherwise the snapshot id of the
    * corresponding snapshot diff list.
    */
+  //TODO: feature is not priority for prototype
   public int searchChild(INode inode) {
     INode child = getChild(inode.getLocalNameBytes(), Snapshot.CURRENT_STATE_ID);
     if (child != inode) {
@@ -431,6 +471,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
    *         otherwise, return the children list corresponding to the snapshot.
    *         Note that the returned list is never null.
    */
+  //TODO: feature is not priority for prototype
   public ReadOnlyList<INode> getChildrenList(final int snapshotId) {
     DirectoryWithSnapshotFeature sf;
     if (snapshotId == Snapshot.CURRENT_STATE_ID
@@ -440,6 +481,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
     return sf.getChildrenList(this, snapshotId);
   }
   
+  // DONE
   private ReadOnlyList<INode> getCurrentChildrenList() {
     return children == null ? ReadOnlyList.Util.<INode> emptyList()
         : ReadOnlyList.Util.asReadOnlyList(children);
@@ -451,6 +493,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
    * @param name a child's name
    * @return the index of the next child
    */
+  // DONE
   static int nextChild(ReadOnlyList<INode> children, byte[] name) {
     if (name.length == 0) { // empty name
       return 0;
@@ -465,6 +508,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
   /**
    * Remove the specified child from this directory.
    */
+  //TODO: feature is not priority for prototype
   public boolean removeChild(INode child, int latestSnapshotId)
       throws QuotaExceededException {
     if (isInLatestSnapshot(latestSnapshotId)) {
@@ -486,6 +530,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
    * 
    * @return true if the child is removed; false if the child is not found.
    */
+  //TODO: feature is not priority for prototype
   public boolean removeChild(final INode child) {
     final int i = searchChildren(child.getLocalNameBytes());
     if (i < 0) {
@@ -507,6 +552,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
    * @return false if the child with this name already exists; 
    *         otherwise, return true;
    */
+  // DONE
   public boolean addChild(INode node, final boolean setModTime,
       final int latestSnapshotId) throws QuotaExceededException {
     final int low = searchChildren(node.getLocalNameBytes());
@@ -530,6 +576,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
     return true;
   }
 
+  // DONE
   public boolean addChild(INode node) {
     final int low = searchChildren(node.getLocalNameBytes());
     if (low >= 0) {
@@ -543,6 +590,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
    * Add the node to the children list at the given insertion point.
    * The basic add method which actually calls children.add(..).
    */
+  // DONE
   private void addChild(final INode node, final int insertionPoint) {
     if (children == null) {
       children = new ArrayList<INode>(DEFAULT_FILES_PER_DIRECTORY);
@@ -556,6 +604,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
   }
 
   @Override
+  //TODO: feature is not priority for prototype
   public Quota.Counts computeQuotaUsage(Quota.Counts counts, boolean useCache,
       int lastSnapshotId) {
     final DirectoryWithSnapshotFeature sf = getDirectoryWithSnapshotFeature();
@@ -583,6 +632,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
     }
   }
 
+  //TODO: feature is not priority for prototype
   private Quota.Counts computeDirectoryQuotaUsage(Quota.Counts counts,
       boolean useCache, int lastSnapshotId) {
     if (children != null) {
@@ -594,6 +644,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
   }
   
   /** Add quota usage for this inode excluding children. */
+  //TODO: feature is not priority for prototype
   public Quota.Counts computeQuotaUsage4CurrentDirectory(Quota.Counts counts) {
     counts.add(Quota.NAMESPACE, 1);
     // include the diff list
@@ -605,6 +656,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
   }
 
   @Override
+  // DONE
   public ContentSummaryComputationContext computeContentSummary(
       ContentSummaryComputationContext summary) {
     final DirectoryWithSnapshotFeature sf = getDirectoryWithSnapshotFeature();
@@ -619,6 +671,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
     }
   }
 
+  // DONE
   ContentSummaryComputationContext computeDirectoryContentSummary(
       ContentSummaryComputationContext summary) {
     ReadOnlyList<INode> childrenList = getChildrenList(Snapshot.CURRENT_STATE_ID);
@@ -684,6 +737,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
    *          The node to be added back
    * @throws QuotaExceededException should not throw this exception
    */
+  // TODO: feature is not priority for prototype
   public void undoRename4ScrParent(final INodeReference oldChild,
       final INode newChild) throws QuotaExceededException {
     DirectoryWithSnapshotFeature sf = getDirectoryWithSnapshotFeature();
@@ -699,6 +753,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
    * (with OVERWRITE option) removes a file/dir from the dst tree, add it back
    * and delete possible record in the deleted list.  
    */
+  // TODO: feature is not priority for prototype
   public void undoRename4DstParent(final INode deletedChild,
       int latestSnapshotId) throws QuotaExceededException {
     DirectoryWithSnapshotFeature sf = getDirectoryWithSnapshotFeature();
@@ -718,17 +773,20 @@ public class INodeDirectory extends INodeWithAdditionalFields
   }
 
   /** Set the children list to null. */
+  // DONE
   public void clearChildren() {
     this.children = null;
   }
 
   @Override
+  // DONE
   public void clear() {
     super.clear();
     clearChildren();
   }
 
   /** Call cleanSubtree(..) recursively down the subtree. */
+  // TODO: feature is not priority for prototype
   public Quota.Counts cleanSubtreeRecursively(final int snapshot,
       int prior, final BlocksMapUpdateInfo collectedBlocks,
       final List<INode> removedINodes, final Map<INode, INode> excludedNodes, 
@@ -755,6 +813,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
   }
 
   @Override
+  // TODO: feature is not priority for prototype
   public void destroyAndCollectBlocks(final BlocksMapUpdateInfo collectedBlocks,
       final List<INode> removedINodes) {
     final DirectoryWithSnapshotFeature sf = getDirectoryWithSnapshotFeature();
@@ -769,6 +828,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
   }
   
   @Override
+  // TODO: feature is not priority for prototype
   public Quota.Counts cleanSubtree(final int snapshotId, int priorSnapshotId,
       final BlocksMapUpdateInfo collectedBlocks,
       final List<INode> removedINodes, final boolean countDiffChange)
@@ -803,6 +863,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
    * Compare the metadata with another INodeDirectory
    */
   @Override
+  // TODO: feature is not priority for prototype
   public boolean metadataEquals(INodeDirectoryAttributes other) {
     return other != null
         && getQuotaCounts().equals(other.getQuotaCounts())
@@ -826,6 +887,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
   static final String DUMPTREE_LAST_ITEM = "\\-";
   @VisibleForTesting
   @Override
+  // TODO: feature is not priority for prototype
   public void dumpTreeRecursively(PrintWriter out, StringBuilder prefix,
       final int snapshot) {
     super.dumpTreeRecursively(out, prefix, snapshot);
@@ -879,6 +941,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
    * @param subs The subtrees.
    */
   @VisibleForTesting
+  // TODO: feature is not priority for prototype
   public static void dumpTreeRecursively(PrintWriter out,
       StringBuilder prefix, Iterable<SnapshotAndINode> subs) {
     if (subs != null) {
@@ -892,16 +955,19 @@ public class INodeDirectory extends INodeWithAdditionalFields
   }
 
   /** A pair of Snapshot and INode objects. */
+  // TODO: feature is not priority for prototype
   public static class SnapshotAndINode {
     public final int snapshotId;
     public final INode inode;
 
+    // TODO: feature is not priority for prototype
     public SnapshotAndINode(int snapshot, INode inode) {
       this.snapshotId = snapshot;
       this.inode = inode;
     }
   }
 
+  // DONE
   public final int getChildrenNum(final int snapshotId) {
     return getChildrenList(snapshotId).size();
   }

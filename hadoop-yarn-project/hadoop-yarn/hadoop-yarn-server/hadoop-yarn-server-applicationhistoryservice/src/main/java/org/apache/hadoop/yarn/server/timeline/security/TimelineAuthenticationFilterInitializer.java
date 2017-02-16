@@ -45,11 +45,11 @@ import com.google.common.annotations.VisibleForTesting;
  * <p>
  * Initializes {@link TimelineAuthenticationFilter} which provides support for
  * Kerberos HTTP SPNEGO authentication.
- * <p/>
- * <p>
+ * </p>
+ * 
  * It enables Kerberos HTTP SPNEGO plus delegation token authentication for the
  * timeline server.
- * <p/>
+ * 
  * Refer to the <code>core-default.xml</code> file, after the comment 'HTTP
  * Authentication' for details on the configuration options. All related
  * configuration properties have 'hadoop.http.authentication.' as prefix.
@@ -70,7 +70,7 @@ public class TimelineAuthenticationFilterInitializer extends FilterInitializer {
   /**
    * <p>
    * Initializes {@link TimelineAuthenticationFilter}
-   * <p/>
+   * </p>
    * <p>
    * Propagates to {@link TimelineAuthenticationFilter} configuration all YARN
    * configuration properties prefixed with

@@ -34,7 +34,7 @@ import com.google.common.annotations.VisibleForTesting;
 /**
  * NMTokenCache manages NMTokens required for an Application Master
  * communicating with individual NodeManagers.
- * <p/>
+ * 
  * By default Yarn client libraries {@link AMRMClient} and {@link NMClient} use
  * {@link #getSingleton()} instance of the cache.
  * <ul>
@@ -44,15 +44,15 @@ import com.google.common.annotations.VisibleForTesting;
  * {@link AMRMClient} and {@link NMClient} are already set up to use the default
  * singleton {@link NMTokenCache}</li>
  * </ul>
- * <p/>
+ * 
  * If running multiple Application Masters in the same JVM, a different cache
  * instance should be used for each Application Master.
- * <p/>
+ * 
  * <ul>
  * <li>
  * If using the {@link AMRMClient} and the {@link NMClient}, setting up and using
  * an instance cache is as follows:
- * <p/>
+ * 
  * 
  * <pre>
  *   NMTokenCache nmTokenCache = new NMTokenCache();
@@ -65,7 +65,7 @@ import com.google.common.annotations.VisibleForTesting;
  * <li>
  * If using the {@link AMRMClientAsync} and the {@link NMClientAsync}, setting up
  * and using an instance cache is as follows:
- * <p/>
+ * 
  * 
  * <pre>
  *   NMTokenCache nmTokenCache = new NMTokenCache();
@@ -81,7 +81,7 @@ import com.google.common.annotations.VisibleForTesting;
  * If using {@link ApplicationMasterProtocol} and
  * {@link ContainerManagementProtocol} directly, setting up and using an
  * instance cache is as follows:
- * <p/>
+ * 
  * 
  * <pre>
  *   NMTokenCache nmTokenCache = new NMTokenCache();

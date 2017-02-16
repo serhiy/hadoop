@@ -26,7 +26,7 @@ import org.apache.hadoop.yarn.api.ContainerManagementProtocol;
  * <p><code>LocalResourceType</code> specifies the <em>type</em>
  * of a resource localized by the <code>NodeManager</code>.</p> 
  *
- * <p>The <em>type</em> can be one of:
+ * The <em>type</em> can be one of:
  *   <ul>
  *     <li>
  *       {@link #FILE} - Regular file i.e. uninterpreted bytes. 
@@ -38,7 +38,7 @@ import org.apache.hadoop.yarn.api.ContainerManagementProtocol;
  *     <li>
  *       {@link #PATTERN} - A hybrid between {@link #ARCHIVE} and {@link #FILE}.
  *   </ul>
- * </p>
+ * 
  *
  * @see LocalResource
  * @see ContainerLaunchContext

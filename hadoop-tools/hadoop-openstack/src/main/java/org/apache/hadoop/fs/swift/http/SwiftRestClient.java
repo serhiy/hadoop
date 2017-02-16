@@ -1061,10 +1061,10 @@ public final class SwiftRestClient {
    * Authenticate to Openstack Keystone
    * As well as returning the access token, the member fields {@link #token},
    * {@link #endpointURI} and {@link #objectLocationURI} are set up for re-use.
-   * <p/>
+   * 
    * This method is re-entrant -if more than one thread attempts to authenticate
    * neither will block -but the field values with have those of the last caller.
-   * <p/>
+   * 
    *
    * @return authenticated access token
    */
@@ -1820,7 +1820,7 @@ public final class SwiftRestClient {
 
   /**
    * Get the blocksize of this filesystem
-   * @return a blocksize >0
+   * @return a blocksize less than 0
    */
   public long getBlocksizeKB() {
     return blocksizeKB;

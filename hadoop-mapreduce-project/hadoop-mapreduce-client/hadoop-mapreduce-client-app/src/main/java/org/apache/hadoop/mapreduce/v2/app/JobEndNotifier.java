@@ -33,7 +33,7 @@ import org.apache.hadoop.mapreduce.v2.api.records.JobReport;
 import org.mortbay.log.Log;
 
 /**
- * <p>This class handles job end notification. Submitters of jobs can choose to
+ * This class handles job end notification. Submitters of jobs can choose to
  * be notified of the end of a job by supplying a URL to which a connection
  * will be established.
  * <ul><li> The URL connection is fire and forget by default.</li> <li>
@@ -44,7 +44,7 @@ import org.mortbay.log.Log;
  * proxy if needed</li><li>
  * The URL may contain sentinels which will be replaced by jobId and jobStatus 
  * (eg. SUCCEEDED/KILLED/FAILED) </li> </ul>
- * </p>
+ * 
  */
 public class JobEndNotifier implements Configurable {
   private static final String JOB_ID = "$jobId";

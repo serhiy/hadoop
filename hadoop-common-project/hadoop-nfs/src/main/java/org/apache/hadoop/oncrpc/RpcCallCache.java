@@ -127,7 +127,12 @@ public class RpcCallCache {
     return program;
   }
 
-  /** Mark a request as completed and add corresponding response to the cache */
+  /** Mark a request as completed and add corresponding response to the cache
+   * 
+   * @param clientId
+   * @param xid
+   * @param response
+   */
   public void callCompleted(InetAddress clientId, int xid, RpcResponse response) {
     ClientRequest req = new ClientRequest(clientId, xid);
     CacheEntry e;
@@ -138,8 +143,12 @@ public class RpcCallCache {
   }
   
   /**
-   * Check the cache for an entry. If it does not exist, add the request
+     * Check the cache for an entry. If it does not exist, add the request
    * as in progress.
+   * 
+   * @param clientId
+   * @param xid
+   * @return
    */
   public CacheEntry checkOrAddToCache(InetAddress clientId, int xid) {
     ClientRequest req = new ClientRequest(clientId, xid);
@@ -154,7 +163,11 @@ public class RpcCallCache {
     return e;
   }
   
-  /** Return number of cached entries */
+  /**
+   *  Return number of cached entries
+   * 
+   * @return
+   */
   public int size() {
     return map.size();
   }

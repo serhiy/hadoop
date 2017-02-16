@@ -35,22 +35,22 @@ import java.net.URI;
 /**
  * Distribute application-specific large, read-only files efficiently.
  * 
- * <p><code>DistributedCache</code> is a facility provided by the Map-Reduce
+ * <code>DistributedCache</code> is a facility provided by the Map-Reduce
  * framework to cache files (text, archives, jars etc.) needed by applications.
- * </p>
  * 
- * <p>Applications specify the files, via urls (hdfs:// or http://) to be cached 
+ * 
+ * Applications specify the files, via urls (hdfs:// or http://) to be cached 
  * via the {@link org.apache.hadoop.mapred.JobConf}. The
  * <code>DistributedCache</code> assumes that the files specified via urls are
  * already present on the {@link FileSystem} at the path specified by the url
- * and are accessible by every machine in the cluster.</p>
+ * and are accessible by every machine in the cluster.
  * 
- * <p>The framework will copy the necessary files on to the slave node before 
+ * The framework will copy the necessary files on to the slave node before 
  * any tasks for the job are executed on that node. Its efficiency stems from 
  * the fact that the files are only copied once per job and the ability to 
- * cache archives which are un-archived on the slaves.</p> 
+ * cache archives which are un-archived on the slaves. 
  *
- * <p><code>DistributedCache</code> can be used to distribute simple, read-only
+ * <code>DistributedCache</code> can be used to distribute simple, read-only
  * data/text files and/or more complex types such as archives, jars etc. 
  * Archives (zip, tar and tgz/tar.gz files) are un-archived at the slave nodes. 
  * Jars may be optionally added to the classpath of the tasks, a rudimentary 
@@ -60,15 +60,15 @@ import java.net.URI;
  * version symlinks are always created.  If the URL does not have a fragment 
  * the name of the file or directory will be used. If multiple files or 
  * directories map to the same link name, the last one added, will be used.  All
- * others will not even be downloaded.</p>
+ * others will not even be downloaded.
  * 
- * <p><code>DistributedCache</code> tracks modification timestamps of the cache 
+ * <code>DistributedCache</code> tracks modification timestamps of the cache 
  * files. Clearly the cache files should not be modified by the application 
- * or externally while the job is executing.</p>
+ * or externally while the job is executing.
  * 
- * <p>Here is an illustrative example on how to use the 
- * <code>DistributedCache</code>:</p>
- * <p><blockquote><pre>
+ * Here is an illustrative example on how to use the 
+ * <code>DistributedCache</code>:
+ *
  *     // Setting up the cache for the application
  *     
  *     1. Copy the requisite files to the <code>FileSystem</code>:
@@ -115,7 +115,7 @@ import java.net.URI;
  *       }
  *     }
  *     
- * </pre></blockquote></p>
+ * 
  *
  * It is also very common to use the DistributedCache by using
  * {@link org.apache.hadoop.util.GenericOptionsParser}.
@@ -235,7 +235,7 @@ public class DistributedCache {
    * DistributedCache and MapReduce code.
    * @param conf The configuration which stored the timestamps
    * @return a long array of timestamps
-   * @throws IOException
+   * 
    * @deprecated Use {@link JobContext#getArchiveTimestamps()} instead
    */
   @Deprecated
@@ -250,7 +250,7 @@ public class DistributedCache {
    * DistributedCache and MapReduce code.
    * @param conf The configuration which stored the timestamps
    * @return a long array of timestamps
-   * @throws IOException
+   * 
    * @deprecated Use {@link JobContext#getFileTimestamps()} instead
    */
   @Deprecated
@@ -434,7 +434,7 @@ public class DistributedCache {
    * internal DistributedCache and MapReduce code.
    * @param conf The configuration which stored the timestamps
    * @return a string array of booleans 
-   * @throws IOException
+   * 
    */
   public static boolean[] getFileVisibilities(Configuration conf) {
     return parseBooleans(conf.getStrings(MRJobConfig.CACHE_FILE_VISIBILITIES));

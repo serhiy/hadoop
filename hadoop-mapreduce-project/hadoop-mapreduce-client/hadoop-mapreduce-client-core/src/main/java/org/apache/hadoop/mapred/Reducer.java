@@ -38,11 +38,9 @@ import org.apache.hadoop.io.Closeable;
  * Similarly they can use the {@link Closeable#close()} method for
  * de-initialization.</p>
 
- * <p><code>Reducer</code> has 3 primary phases:</p>
+ * <code>Reducer</code> has 3 primary phases:
  * <ol>
  *   <li>
- *   
- *   <h4 id="Shuffle">Shuffle</h4>
  *   
  *   <p><code>Reducer</code> is input the grouped output of a {@link Mapper}.
  *   In the phase the framework, for each <code>Reducer</code>, fetches the 
@@ -51,7 +49,7 @@ import org.apache.hadoop.io.Closeable;
  *   </li>
  *   
  *   <li>
- *   <h4 id="Sort">Sort</h4>
+ *  
  *   
  *   <p>The framework groups <code>Reducer</code> inputs by <code>key</code>s 
  *   (since different <code>Mapper</code>s may have output the same key) in this
@@ -60,7 +58,7 @@ import org.apache.hadoop.io.Closeable;
  *   <p>The shuffle and sort phases occur simultaneously i.e. while outputs are
  *   being fetched they are merged.</p>
  *      
- *   <h5 id="SecondarySort">SecondarySort</h5>
+ *   
  *   
  *   <p>If equivalence rules for keys while grouping the intermediates are 
  *   different from those for grouping keys before reduction, then one may 
@@ -86,11 +84,10 @@ import org.apache.hadoop.io.Closeable;
  *   </li>
  *   
  *   <li>   
- *   <h4 id="Reduce">Reduce</h4>
  *   
  *   <p>In this phase the 
  *   {@link #reduce(Object, Iterator, OutputCollector, Reporter)}
- *   method is called for each <code>&lt;key, (list of values)></code> pair in
+ *   method is called for each <code>(list of values)</code> pair in
  *   the grouped inputs.</p>
  *   <p>The output of the reduce task is typically written to the 
  *   {@link FileSystem} via 
@@ -101,7 +98,6 @@ import org.apache.hadoop.io.Closeable;
  * <p>The output of the <code>Reducer</code> is <b>not re-sorted</b>.</p>
  * 
  * <p>Example:</p>
- * <p><blockquote><pre>
  *     public class MyReducer&lt;K extends WritableComparable, V extends Writable&gt; 
  *     extends MapReduceBase implements Reducer&lt;K, V, K, V&gt; {
  *     
@@ -156,7 +152,6 @@ import org.apache.hadoop.io.Closeable;
  *         }
  *       }
  *     }
- * </pre></blockquote></p>
  * 
  * @see Mapper
  * @see Partitioner
@@ -171,7 +166,7 @@ public interface Reducer<K2, V2, K3, V3> extends JobConfigurable, Closeable {
    * <i>Reduces</i> values for a given key.  
    * 
    * <p>The framework calls this method for each 
-   * <code>&lt;key, (list of values)></code> pair in the grouped inputs.
+   * <code>(list of values)</code> pair in the grouped inputs.
    * Output values must be of the same type as input values.  Input keys must 
    * not be altered. The framework will <b>reuse</b> the key and value objects
    * that are passed into the reduce, therefore the application should clone

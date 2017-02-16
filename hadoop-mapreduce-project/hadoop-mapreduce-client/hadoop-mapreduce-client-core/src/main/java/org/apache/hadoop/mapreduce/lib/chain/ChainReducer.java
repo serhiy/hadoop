@@ -31,54 +31,54 @@ import java.io.IOException;
  * The ChainReducer class allows to chain multiple Mapper classes after a
  * Reducer within the Reducer task.
  * 
- * <p>
+ * 
  * For each record output by the Reducer, the Mapper classes are invoked in a
  * chained (or piped) fashion. The output of the reducer becomes the input of
  * the first mapper and output of first becomes the input of the second, and so
  * on until the last Mapper, the output of the last Mapper will be written to
  * the task's output.
- * </p>
- * <p>
+ * 
+ * 
  * The key functionality of this feature is that the Mappers in the chain do not
  * need to be aware that they are executed after the Reducer or in a chain. This
  * enables having reusable specialized Mappers that can be combined to perform
  * composite operations within a single task.
- * </p>
- * <p>
+ * 
+ * 
  * Special care has to be taken when creating chains that the key/values output
  * by a Mapper are valid for the following Mapper in the chain. It is assumed
  * all Mappers and the Reduce in the chain use matching output and input key and
  * value classes as no conversion is done by the chaining code.
- * </p>
- * </p> Using the ChainMapper and the ChainReducer classes is possible to
+ * 
+ *  Using the ChainMapper and the ChainReducer classes is possible to
  * compose Map/Reduce jobs that look like <code>[MAP+ / REDUCE MAP*]</code>. And
- * immediate benefit of this pattern is a dramatic reduction in disk IO. </p>
- * <p>
+ * immediate benefit of this pattern is a dramatic reduction in disk IO. 
+ * 
  * IMPORTANT: There is no need to specify the output key/value classes for the
  * ChainReducer, this is done by the setReducer or the addMapper for the last
  * element in the chain.
- * </p>
+ * 
  * ChainReducer usage pattern:
- * <p/>
+ * 
  * 
  * <pre>
  * ...
  * Job = new Job(conf);
  * ....
- * <p/>
+ * 
  * Configuration reduceConf = new Configuration(false);
  * ...
  * ChainReducer.setReducer(job, XReduce.class, LongWritable.class, Text.class,
  *   Text.class, Text.class, true, reduceConf);
- * <p/>
+ * 
  * ChainReducer.addMapper(job, CMap.class, Text.class, Text.class,
  *   LongWritable.class, Text.class, false, null);
- * <p/>
+ * 
  * ChainReducer.addMapper(job, DMap.class, LongWritable.class, Text.class,
  *   LongWritable.class, LongWritable.class, true, null);
- * <p/>
+ * 
  * ...
- * <p/>
+ * 
  * job.waitForCompletion(true);
  * ...
  * </pre>

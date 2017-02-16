@@ -30,7 +30,7 @@ import java.util.Set;
 /**
  * <p><code>ApplicationReport</code> is a report of an application.</p>
  *
- * <p>It includes details such as:
+ * It includes details such as:
  *   <ul>
  *     <li>{@link ApplicationId} of the application.</li>
  *     <li>Applications user.</li>
@@ -44,7 +44,7 @@ import java.util.Set;
  *     <li>Start time of the application.</li>
  *     <li>Client {@link Token} of the application (if security is enabled).</li>
  *   </ul>
- * </p>
+ * 
  *
  * @see ApplicationClientProtocol#getApplicationReport(org.apache.hadoop.yarn.api.protocolrecords.GetApplicationReportRequest)
  */
@@ -341,20 +341,15 @@ public abstract class ApplicationReport {
 
   /**
    * Get the AMRM token of the application.
-   * <p/>
+   * 
    * The AMRM token is required for AM to RM scheduling operations. For 
    * managed Application Masters Yarn takes care of injecting it. For unmanaged
    * Applications Masters, the token must be obtained via this method and set
    * in the {@link org.apache.hadoop.security.UserGroupInformation} of the
    * current user.
-   * <p/>
+   * 
    * The AMRM token will be returned only if all the following conditions are
-   * met:
-   * <li>
-   *   <ul>the requester is the owner of the ApplicationMaster</ul>
-   *   <ul>the application master is an unmanaged ApplicationMaster</ul>
-   *   <ul>the application master is in ACCEPTED state</ul>
-   * </li>
+   * met
    * Else this method returns NULL.
    * 
    * @return the AM to RM token if available.

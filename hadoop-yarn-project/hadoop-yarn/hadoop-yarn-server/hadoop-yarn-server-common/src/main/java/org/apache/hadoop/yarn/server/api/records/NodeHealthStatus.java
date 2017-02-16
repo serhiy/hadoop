@@ -29,7 +29,7 @@ import org.apache.hadoop.yarn.util.Records;
  * <p><code>NodeHealthStatus</code> is a summary of the health status of the
  * node.</p>
  *
- * <p>It includes information such as:
+ * It includes information such as:
  *   <ul>
  *     <li>
  *       An indicator of whether the node is healthy, as determined by the 
@@ -38,7 +38,7 @@ import org.apache.hadoop.yarn.util.Records;
  *     <li>The previous time at which the health status was reported.</li>
  *     <li>A diagnostic report on the health status.</li>
  *   </ul>
- * </p>
+ * 
  * 
  * @see NodeReport
  * @see ApplicationClientProtocol#getClusterNodes(org.apache.hadoop.yarn.api.protocolrecords.GetClusterNodesRequest)

@@ -312,7 +312,7 @@ public class NativeS3FileSystem extends FileSystem {
 
   /**
    * Return the protocol scheme for the FileSystem.
-   * <p/>
+   * 
    *
    * @return <code>s3n</code>
    */

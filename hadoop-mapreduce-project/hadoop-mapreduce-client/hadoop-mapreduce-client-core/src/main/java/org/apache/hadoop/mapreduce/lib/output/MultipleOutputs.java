@@ -81,7 +81,7 @@ import java.util.*;
  * <p>
  * Usage in Reducer:
  * <pre>
- * <K, V> String generateFileName(K k, V v) {
+ * K, V String generateFileName(K k, V v) {
  *   return k.toString() + "_" + v.toString();
  * }
  * 
@@ -124,16 +124,16 @@ import java.util.*;
  * </p>
  * 
  * <pre>
- * private MultipleOutputs<Text, Text> out;
+ * private MultipleOutputsText, Text out;
  * 
  * public void setup(Context context) {
- *   out = new MultipleOutputs<Text, Text>(context);
+ *   out = new MultipleOutputsText, Text(context);
  *   ...
  * }
  * 
- * public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+ * public void reduce(Text key, Iterable values, Context context) throws IOException, InterruptedException {
  * for (Text t : values) {
- *   out.write(key, t, generateFileName(<<i>parameter list...</i>>));
+ *   out.write(key, t, generateFileName();
  *   }
  * }
  * 
@@ -294,7 +294,7 @@ public class MultipleOutputs<KEYOUT, VALUEOUT> {
 
   /**
    * Adds a named output for the job.
-   * <p/>
+   * 
    *
    * @param job               job to add the named output
    * @param namedOutput       named output name, it has to be a word, letters

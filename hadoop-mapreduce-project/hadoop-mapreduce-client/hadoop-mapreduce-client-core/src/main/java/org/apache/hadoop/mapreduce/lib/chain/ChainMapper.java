@@ -30,51 +30,51 @@ import org.apache.hadoop.mapreduce.lib.chain.Chain.ChainBlockingQueue;
  * The ChainMapper class allows to use multiple Mapper classes within a single
  * Map task.
  * 
- * <p>
+ * 
  * The Mapper classes are invoked in a chained (or piped) fashion, the output of
  * the first becomes the input of the second, and so on until the last Mapper,
  * the output of the last Mapper will be written to the task's output.
- * </p>
- * <p>
+ * 
+ * 
  * The key functionality of this feature is that the Mappers in the chain do not
  * need to be aware that they are executed in a chain. This enables having
  * reusable specialized Mappers that can be combined to perform composite
  * operations within a single task.
- * </p>
- * <p>
+ * 
+ * 
  * Special care has to be taken when creating chains that the key/values output
  * by a Mapper are valid for the following Mapper in the chain. It is assumed
  * all Mappers and the Reduce in the chain use matching output and input key and
  * value classes as no conversion is done by the chaining code.
- * </p>
- * <p>
+ * 
+ * 
  * Using the ChainMapper and the ChainReducer classes is possible to compose
  * Map/Reduce jobs that look like <code>[MAP+ / REDUCE MAP*]</code>. And
  * immediate benefit of this pattern is a dramatic reduction in disk IO.
- * </p>
- * <p>
+ * 
+ * 
  * IMPORTANT: There is no need to specify the output key/value classes for the
  * ChainMapper, this is done by the addMapper for the last mapper in the chain.
- * </p>
+ * 
  * ChainMapper usage pattern:
- * <p/>
+ * 
  * 
  * <pre>
  * ...
  * Job = new Job(conf);
- * <p/>
+ * 
  * Configuration mapAConf = new Configuration(false);
  * ...
  * ChainMapper.addMapper(job, AMap.class, LongWritable.class, Text.class,
  *   Text.class, Text.class, true, mapAConf);
- * <p/>
+ * 
  * Configuration mapBConf = new Configuration(false);
  * ...
  * ChainMapper.addMapper(job, BMap.class, Text.class, Text.class,
  *   LongWritable.class, Text.class, false, mapBConf);
- * <p/>
+ * 
  * ...
- * <p/>
+ * 
  * job.waitForComplettion(true);
  * ...
  * </pre>

@@ -68,7 +68,7 @@ public class Block implements Writable, Comparable<Block> {
     return metaFilePattern.matcher(name).matches();
   }
 
-  public static File metaToBlockFile(File metaFile) {
+  public static File metaToBlockFile(File  metaFile) {
     return new File(metaFile.getParent(), metaFile.getName().substring(
         0, metaFile.getName().lastIndexOf('_')));
   }

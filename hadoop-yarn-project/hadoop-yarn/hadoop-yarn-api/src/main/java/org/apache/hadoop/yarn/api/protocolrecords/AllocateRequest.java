@@ -34,7 +34,7 @@ import org.apache.hadoop.yarn.util.Records;
  * <p>The core request sent by the <code>ApplicationMaster</code> to the 
  * <code>ResourceManager</code> to obtain resources in the cluster.</p> 
  *
- * <p>The request includes:
+ * The request includes:
  *   <ul>
  *     <li>A response id to track duplicate responses.</li>
  *     <li>Progress information.</li>
@@ -47,7 +47,7 @@ import org.apache.hadoop.yarn.util.Records;
  *       A list of unused {@link Container} which are being returned. 
  *     </li>
  *   </ul>
- * </p>
+ * 
  * 
  * @see ApplicationMasterProtocol#allocate(AllocateRequest)
  */
