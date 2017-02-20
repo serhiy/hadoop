@@ -248,7 +248,9 @@ public class INodesInPath {
         }
       } else {
         // normal case, and also for resolving file/dir under snapshot root
-        curNode = dir.getChild(childName, existing.getPathSnapshotId());
+          LOG.info("--- MPSR ---: resolve() : Curr node = '" + curNode.getLocalName() + "'. Getting child [name = '" + DFSUtil.bytes2String(childName) + "'].");
+	        curNode = dir.getChild(childName, existing.getPathSnapshotId());
+	        LOG.info("--- MPSR ---: resolve() : ---- Child ['" + curNode + "'].");
       }
       count++;
       index++;
@@ -424,6 +426,8 @@ public class INodesInPath {
         // normal case, and also for resolving file/dir under snapshot root
         curNode = dir.getChild(childName, existing.getPathSnapshotId());
       }*/
+      
+      LOG.info("--- MPSR ---: resolveMpsr(): Current node [name = '" + dir.getLocalName() + "'].");
       
       INode child = dir.getChild(childName, existing.getPathSnapshotId());
       if (child != null) {

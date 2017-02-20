@@ -1088,6 +1088,10 @@ public class FSImageFormat {
    */
   static String renameReservedPathsOnUpgrade(String path,
       final int layoutVersion) {
+	  
+	  LOG.info("--- MPSR ---: renameReservedPathsOnUpgrade() : The path before any modifications = " + path);
+	  
+	  
     final String oldPath = path;
     // If any known LVs aren't supported, we're doing an upgrade
     if (!NameNodeLayoutVersion.supports(Feature.ADD_INODE_ID, layoutVersion)) {

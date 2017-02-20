@@ -830,7 +830,7 @@ public class FSEditLog implements LogsPurgeable {
     if (f != null) {
       op.setAclEntries(AclStorage.readINodeLogicalAcl(newNode));
     }
-
+    
     XAttrFeature x = newNode.getXAttrFeature();
     if (x != null) {
       op.setXAttrs(x.getXAttrs());

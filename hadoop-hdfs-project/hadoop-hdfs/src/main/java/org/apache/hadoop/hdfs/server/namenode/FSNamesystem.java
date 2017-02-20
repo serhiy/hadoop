@@ -108,6 +108,7 @@ import java.io.StringWriter;
 import java.lang.management.ManagementFactory;
 import java.net.InetAddress;
 import java.net.URI;
+import java.nio.CharBuffer;
 import java.security.GeneralSecurityException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -4832,6 +4833,8 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 	    } catch (AccessControlException e) {
 	      logAuditEvent(false, "mkdirs", src);
 	      throw e;
+	    } finally {
+	    	printFS();
 	    }
 	    return ret;
 	  }
@@ -4992,7 +4995,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 	    } else {
 	    	LOG.info("--- MPSR ---: mkdirsInternalMpsr() : Successfully created master [master = '" + src + "'].");
 	    	for (int count = 0; count < MPSRPartitioningProvider.NUM_PARTITIONS; count++) {
-	    		LOG.info("--- MPSR ---: mkdirsInternalMpsr() : + --- " + count + " " + inodes[count].getLocalName());
+	    		LOG.info("--- MPSR ---: mkdirsInternalMpsr() : + --- " + count + " " + inodes[count].getLocalName() + " [id = '" + inodes[count].getId() + "']");
 	    	}
 	    }
 	    return true;
@@ -5114,14 +5117,17 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
                  UnresolvedLinkException, SnapshotAccessControlException,
                  AclException {
 	  
-	LOG.info("--- MPSR ---: Creating directories recursively " + src + " with underlying directories.");  
+	LOG.info("--- MPSR ---: mkdirsRecursivelyMpsr() : Creating directories recursively " + src + " with underlying directories.");  
 	  
     src = FSDirectory.normalizePath(src);
     src = MPSRPartitioningProvider.orderTags(src);
+    
+	LOG.info("--- MPSR ---: mkdirsRecursivelyMpsr() : Ordered directories " + src + ".");
+    
     byte[][] components = INode.getPathComponents(src);
     final int lastInodeIndex = components.length - 1;
     
-    INode[] underlyingInodes = new INode[MPSRPartitioningProvider.NUM_PARTITIONS];
+    INodeUnderlyingDirectory[] underlyingInodes = new INodeUnderlyingDirectory[MPSRPartitioningProvider.NUM_PARTITIONS];
 
     // lock root
     dir.writeLock();
@@ -5146,7 +5152,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
         // get the pointer to the last existing underlying directory
         for (int j = 0; j < MPSRPartitioningProvider.NUM_PARTITIONS; j++) {
 	        if (((INodeDirectory)inodes[i]).getUnderlyingDirectory(j) != null) {
-	        	underlyingInodes[j] = ((INodeDirectory)inodes[i]).getUnderlyingDirectory(j);
+	        	underlyingInodes[j] = (INodeUnderlyingDirectory) ((INodeDirectory)inodes[i]).getUnderlyingDirectory(j);
 	        }
         }
       }
@@ -5186,11 +5192,10 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       // create directories beginning from the first null index
       for(; i < inodes.length; i++) {
         pathbuilder.append(Path.SEPARATOR).append(DFSUtil.bytes2String(components[i]));
-        INodeDirectory createdDir = dir.unprotectedMkdirMpsr(this, iip, i, components[i], (i < lastInodeIndex) ? parentPermissions : permissions, null, now);
+        Map<INodeDirectory, INodeUnderlyingDirectory[]> createdDir = dir.unprotectedMkdirMpsr(this.allocateNewInodeId(), iip, i, components[i], (i < lastInodeIndex) ? parentPermissions : permissions, null, now, underlyingInodes);
         
-        for (int j = 0; j < MPSRPartitioningProvider.NUM_PARTITIONS; j++) {
-        	underlyingInodes[j] = mkdirUnderlying(createdDir, (INodeUnderlyingDirectory)underlyingInodes[j], DFSUtil.bytes2String(components[i]), j);
-        }
+        Map.Entry<INodeDirectory, INodeUnderlyingDirectory[]> entry = createdDir.entrySet().iterator().next();
+        underlyingInodes = entry.getValue();
         
         if (inodes[i] == null) {
           return null;
@@ -5209,31 +5214,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     return underlyingInodes;
   }
   
-  private INodeUnderlyingDirectory mkdirUnderlying(INodeDirectory master, INodeUnderlyingDirectory parent, String subdirectory, int partitioning) {
-	  INodeUnderlyingDirectory underlyingDirectory = null;
-	  if (MPSRPartitioningProvider.getPartitioningTags(partitioning).contains(MPSRPartitioningProvider.getTag(subdirectory))) {
-		  for (INode inode: parent.getChildrenList()) {
-			  if (inode.getLocalName().equals(subdirectory)) {
-				  underlyingDirectory = (INodeUnderlyingDirectory) inode;
-			  }
-		  }
-		  underlyingDirectory = new INodeUnderlyingDirectory(allocateNewInodeId(), DFSUtil.string2Bytes(subdirectory), master.getPermissionStatus(), master.getAccessTime());
-	  } else {
-		  for (INode inode: parent.getChildrenList()) {
-			  if (inode.getLocalName().equals(subdirectory)) {
-				  underlyingDirectory = (INodeUnderlyingDirectory) inode;
-			  }
-		  }
-	  }
-	  
-	  if (underlyingDirectory != null) {
-		  underlyingDirectory.setParent(parent);
-		  parent.addChild(underlyingDirectory);
-		  master.addUnderlyingDirectory(partitioning, underlyingDirectory);
-	  }
-	  
-	  return underlyingDirectory != null ? underlyingDirectory : parent;
-  }
+
 
   /**
    * Get the content summary for a specific file/dir.
@@ -10225,5 +10206,38 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       logger.addAppender(asyncAppender);        
     }
   }
+  
+  public void printFS() {
+	  LOG.info(" --- PRINTING FILE SYSTEM --- ");
+	  
+	  printFS(dir.getRoot(), 0);
+	  
+	  LOG.info(" --- -------------------- --- ");
+  }
+
+	private void printFS(INode inode, int level) {
+		LOG.info(spaces(level) + inode.getLocalName() + "(id="+inode.getId()+")");
+		if (inode instanceof INodeDirectory) {
+			for (int i = 0; i < MPSRPartitioningProvider.NUM_PARTITIONS; i++) {
+				if (((INodeDirectory)inode).getUnderlyingDirectory(i) != null) {
+					INode udir = ((INodeDirectory)inode).getUnderlyingDirectory(i);
+					LOG.info(spaces(level) + "[" + udir.getLocalName() + "(id = " + udir.getId() + ")]");
+				} else {
+					LOG.info(spaces(level) + "----------");
+				}
+			}
+			
+			LOG.info("");
+			
+			for (INode i: ((INodeDirectory)inode).getChildrenList(Snapshot.CURRENT_STATE_ID)){
+				printFS(i, level+1);
+			}
+		}
+
+	}
+	
+	private static String spaces(int n) {
+		return CharBuffer.allocate(n * 4).toString().replace('\0', ' ');
+	}
 }
 

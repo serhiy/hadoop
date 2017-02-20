@@ -144,6 +144,7 @@ public class FSEditLogLoader {
       return numEdits;
     } finally {
       edits.close();
+      fsNamesys.printFS();
       fsNamesys.writeUnlock();
       prog.endStep(Phase.LOADING_EDITS, step);
     }
@@ -227,11 +228,13 @@ public class FSEditLogLoader {
               LOG.trace("op=" + op + ", startOpt=" + startOpt
                   + ", numEdits=" + numEdits + ", totalEdits=" + totalEdits);
             }
-            long inodeId = applyEditLogOp(op, fsDir, startOpt,
-                in.getVersion(true), lastInodeId);
+            LOG.trace("--- MPSR ---: loadEditRecords() : Calculating INode id [lastInodeId = '" + lastInodeId + "'] . . . ");
+            long inodeId = applyEditLogOp(op, fsDir, startOpt, in.getVersion(true), lastInodeId); 
+            LOG.trace("--- MPSR ---: loadEditRecords() : Calculated INode id [id = '" + inodeId + "'].");
             if (lastInodeId < inodeId) {
               lastInodeId = inodeId;
             }
+            LOG.trace("--- MPSR ---: loadEditRecords() : Calculated last INode id [id = '" + lastInodeId + "'].");
           } catch (RollingUpgradeOp.RollbackException e) {
             throw e;
           } catch (Throwable e) {
@@ -298,6 +301,8 @@ public class FSEditLogLoader {
   private long getAndUpdateLastInodeId(long inodeIdFromOp, int logVersion,
       long lastInodeId) throws IOException {
     long inodeId = inodeIdFromOp;
+    
+    LOG.info("--- MPSR ---: getAndUpdateLastInodeId() : Determining last INode id [inodeIdFromOp = '" + inodeId + "', lastInodeId = '" + lastInodeId + "']."); 
 
     if (inodeId == INodeId.GRANDFATHER_INODE_ID) {
       if (NameNodeLayoutVersion.supports(
@@ -306,10 +311,12 @@ public class FSEditLogLoader {
             + " supports inodeId but gave bogus inodeId");
       }
       inodeId = fsNamesys.allocateNewInodeId();
+      LOG.info("--- MPSR ---: getAndUpdateLastInodeId() : Allocated new id [id = '" + inodeId + "']."); 
     } else {
       // need to reset lastInodeId. fsnamesys gets lastInodeId firstly from
       // fsimage but editlog captures more recent inodeId allocations
       if (inodeId > lastInodeId) {
+    	  LOG.info("--- MPSR ---: getAndUpdateLastInodeId() : Resetting last inode id to [inodeId = '" + inodeId + "']."); 
         fsNamesys.resetLastInodeId(inodeId);
       }
     }
@@ -324,6 +331,8 @@ public class FSEditLogLoader {
       LOG.trace("replaying edit log: " + op);
     }
     final boolean toAddRetryCache = fsNamesys.hasRetryCache() && op.hasRpcIds();
+    
+    LOG.info("--- MPSR ---: applyEditLogOp() : Entering switch."); 
     
     switch (op.opCode) {
     case OP_ADD: {
@@ -362,6 +371,8 @@ public class FSEditLogLoader {
         // add to the file tree
         inodeId = getAndUpdateLastInodeId(addCloseOp.inodeId, logVersion,
             lastInodeId);
+        LOG.info("--- MPSR ---: applyEditLogOp : OP_ADD operation [inodeId = '" + inodeId + "'].");
+         
         newFile = fsDir.unprotectedAddFile(inodeId,
             path, addCloseOp.permissions, addCloseOp.aclEntries,
             addCloseOp.xAttrs,
@@ -523,12 +534,14 @@ public class FSEditLogLoader {
       break;
     }
     case OP_MKDIR: {
+    	LOG.info("--- MPSR ---: applyEditLogOp() : Detected MK_DIR operation.");
       MkdirOp mkdirOp = (MkdirOp)op;
       inodeId = getAndUpdateLastInodeId(mkdirOp.inodeId, logVersion,
           lastInodeId);
-      fsDir.unprotectedMkdir(inodeId,
-          renameReservedPathsOnUpgrade(mkdirOp.path, logVersion),
-          mkdirOp.permissions, mkdirOp.aclEntries, mkdirOp.timestamp);
+  		LOG.info("--- MPSR ---: applyEditLogOp() : MK_DIR operation [inodeId = '" + inodeId + "'].");
+  		inodeId = fsDir.getLastInodeId(fsDir.unprotectedMkdirMpsr(inodeId,
+          renameReservedPathsOnUpgrade(mkdirOp.path.replaceAll("//", "/"), logVersion),
+          mkdirOp.permissions, mkdirOp.aclEntries, mkdirOp.timestamp));
       break;
     }
     case OP_SET_GENSTAMP_V1: {
@@ -587,6 +600,9 @@ public class FSEditLogLoader {
       SymlinkOp symlinkOp = (SymlinkOp)op;
       inodeId = getAndUpdateLastInodeId(symlinkOp.inodeId, logVersion,
           lastInodeId);
+      
+      LOG.info("--- MPSR ---: applyEditLogOp() : OP_SYMLINK operation [inodeId = '" + inodeId + "'].");
+      
       fsDir.unprotectedAddSymlink(inodeId,
           renameReservedPathsOnUpgrade(symlinkOp.path, logVersion),
           symlinkOp.value, symlinkOp.mtime, symlinkOp.atime,
@@ -851,6 +867,9 @@ public class FSEditLogLoader {
     default:
       throw new IOException("Invalid operation read " + op.opCode);
     }
+    
+    LOG.info("--- MPSR ---: applyEditLogOp() : Determined INode id [id = '" + inodeId + "'].");
+    
     return inodeId;
   }
   

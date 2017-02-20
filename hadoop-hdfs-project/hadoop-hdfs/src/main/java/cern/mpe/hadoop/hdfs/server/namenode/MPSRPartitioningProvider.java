@@ -70,7 +70,7 @@ public class MPSRPartitioningProvider {
 			}
 		}
 		
-		sb.append(paths[paths.length - 1]);
+		//sb.append(paths[paths.length - 1]);
 		
 		return sb.toString();
 	}

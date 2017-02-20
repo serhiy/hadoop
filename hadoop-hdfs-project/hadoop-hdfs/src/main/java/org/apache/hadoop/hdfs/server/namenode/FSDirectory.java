@@ -17,7 +17,6 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
-import static org.apache.hadoop.fs.BatchedRemoteIterator.BatchedListEntries;
 import static org.apache.hadoop.hdfs.server.common.HdfsServerConstants.CRYPTO_XATTR_ENCRYPTION_ZONE;
 import static org.apache.hadoop.hdfs.server.common.HdfsServerConstants.CRYPTO_XATTR_FILE_ENCRYPTION_INFO;
 import static org.apache.hadoop.hdfs.server.common.HdfsServerConstants.SECURITY_XATTR_UNREADABLE_BY_SUPERUSER;
@@ -35,15 +34,12 @@ import java.util.ListIterator;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-import com.google.protobuf.InvalidProtocolBufferException;
-
-import cern.mpe.hadoop.hdfs.server.namenode.MPSRPartitioningProvider;
-
 import org.apache.hadoop.HadoopIllegalArgumentException;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.crypto.CipherSuite;
 import org.apache.hadoop.crypto.CryptoProtocolVersion;
+import org.apache.hadoop.fs.BatchedRemoteIterator.BatchedListEntries;
 import org.apache.hadoop.fs.ContentSummary;
 import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileEncryptionInfo;
@@ -96,12 +92,15 @@ import org.apache.hadoop.hdfs.server.namenode.snapshot.Snapshot.Root;
 import org.apache.hadoop.hdfs.util.ByteArray;
 import org.apache.hadoop.hdfs.util.ChunkedArrayList;
 import org.apache.hadoop.hdfs.util.ReadOnlyList;
+import org.apache.hadoop.security.AccessControlException;
+import org.mortbay.log.Log;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
-import org.apache.hadoop.security.AccessControlException;
-import org.mortbay.log.Log;
+import com.google.protobuf.InvalidProtocolBufferException;
+
+import cern.mpe.hadoop.hdfs.server.namenode.MPSRPartitioningProvider;
 
 /**
  * Both FSDirectory and FSNamesystem manage the state of the namespace.
@@ -1920,6 +1919,62 @@ public class FSDirectory implements Closeable {
         timestamp);
     return inodes[pos];
   }
+  
+  
+  
+  // serhiy
+  INode unprotectedMkdirMpsr(long inodeId, String src, PermissionStatus permissions,
+          List<AclEntry> aclEntries, long timestamp) throws QuotaExceededException, UnresolvedLinkException, AclException {
+		assert hasWriteLock();
+		//NameNode.LOG.info("--- MPSR ---: unprotectedMkdirMpsr() : Ordering tags [src = '" + src + "'].");
+		//src = MPSRPartitioningProvider.orderTags(src);
+		byte[][] components = INode.getPathComponents(src);
+		
+		INodesInPath iip = getExistingPathINodes(components);
+		
+		
+		
+		INode[] inodes = iip.getINodes();
+		NameNode.LOG.info("--- MPSR ---: unprotectedMkdirMpsr() : Printing inodes in path[src = '" + src + "'].");
+		for (INode inode: inodes) {
+			if (inode != null) {
+				NameNode.LOG.info("--- MPSR ---: unprotectedMkdirMpsr() : Inode details [name = '" + inode.getLocalName() + "', class = '" + inode.getClass().getSimpleName() + "']");
+			}
+		}
+		
+		final int pos = inodes.length - 1;
+		
+		INodeUnderlyingDirectory[] underlyingInodes = new INodeUnderlyingDirectory[MPSRPartitioningProvider.NUM_PARTITIONS];
+		for(int i = 0; i < inodes.length && inodes[i] != null; i++) {
+			NameNode.LOG.info("--- MPSR ---: unprotectedMkdirMpsr() : Determining underlying directories [master = '" + inodes[i].getLocalName() + "'].");
+	        for (int j = 0; j < MPSRPartitioningProvider.NUM_PARTITIONS; j++) {
+		        if (((INodeDirectory)inodes[i]).getUnderlyingDirectory(j) != null) {
+		        	underlyingInodes[j] = (INodeUnderlyingDirectory) ((INodeDirectory)inodes[i]).getUnderlyingDirectory(j);
+		        }
+		        NameNode.LOG.info("--- MPSR ---: unprotectedMkdirMpsr() : Underlying directory determine [udir = '" + underlyingInodes[j].getLocalName() + "', partitioning = '" + j + "']");
+	        }
+	    }
+
+		Map<INodeDirectory, INodeUnderlyingDirectory[]> res = unprotectedMkdirMpsr(inodeId, iip, pos, components[pos], permissions, aclEntries, timestamp, underlyingInodes);
+		
+		return res.entrySet().iterator().next().getKey();
+	}
+  
+  // serhiy
+  public long getLastInodeId(INode inode) {
+	  long inodeId = inode.getId();
+	  if (inode instanceof INodeDirectory) {
+		  for (int p = 0; p < MPSRPartitioningProvider.NUM_PARTITIONS; p++) {
+			  if (((INodeDirectory)inode).getUnderlyingDirectory(p)!=null && ((INodeDirectory)inode).getUnderlyingDirectory(p).getId() > inodeId) {
+				  inodeId = ((INodeDirectory)inode).getUnderlyingDirectory(p).getId();
+			  }
+		  }
+	  }
+	  return inodeId;
+  }
+  
+  
+  
 
   /** create a directory at index pos.
    * The parent path to the directory is at [0, pos-1].
@@ -1941,24 +1996,32 @@ public class FSDirectory implements Closeable {
   }
   
   // serhiy
-  INodeDirectory unprotectedMkdirMpsr(FSNamesystem namesystem, INodesInPath inodesInPath,
+  Map<INodeDirectory, INodeUnderlyingDirectory[]> unprotectedMkdirMpsr(long inodeId, INodesInPath inodesInPath,
 	      int pos, byte[] name, PermissionStatus permission,
-	      List<AclEntry> aclEntries, long timestamp)
+	      List<AclEntry> aclEntries, long timestamp, INodeUnderlyingDirectory [] underlyingDirectories)
 	      throws QuotaExceededException, AclException {
     assert hasWriteLock();
     
-    Long inodeId = namesystem.allocateNewInodeId();
+    //Long inodeId = namesystem.allocateNewInodeId();
+    Map<INodeDirectory, INodeUnderlyingDirectory[]> ret = new HashMap<INodeDirectory, INodeUnderlyingDirectory[]>();
+    INodeUnderlyingDirectory[] retUD = underlyingDirectories;
     
     final INodeDirectory dir = new INodeDirectory(inodeId, name, permission,
         timestamp);
-    if (addChild(inodesInPath, pos, dir, true)) {
+    if (addChildMpsr(inodesInPath, pos, dir, true)) {
       /*if (aclEntries != null) {
         AclStorage.updateINodeAcl(dir, aclEntries, Snapshot.CURRENT_STATE_ID);
       }*/
       inodesInPath.setINode(pos, dir);
+      
+      for (int j = 0; j < MPSRPartitioningProvider.NUM_PARTITIONS; j++) {
+    	  retUD[j] = mkdirUnderlying(dir, (INodeUnderlyingDirectory)underlyingDirectories[j], DFSUtil.bytes2String(name), j);
+      }
+      
+      ret.put(dir, retUD);
     }
     
-    return dir;
+    return ret;
   }  
   
   /**
@@ -1981,6 +2044,36 @@ public class FSDirectory implements Closeable {
   
   
   
+  
+  
+  
+  
+  public INodeUnderlyingDirectory mkdirUnderlying(INodeDirectory master, INodeUnderlyingDirectory parent, String subdirectory, int partitioning) {
+	  INodeUnderlyingDirectory underlyingDirectory = null;
+	  if (MPSRPartitioningProvider.getPartitioningTags(partitioning).contains(MPSRPartitioningProvider.getTag(subdirectory))) {
+		  for (INode inode: parent.getChildrenList()) {
+			  if (inode.getLocalName().equals(subdirectory)) {
+				  underlyingDirectory = (INodeUnderlyingDirectory) inode;
+			  }
+		  }
+		  underlyingDirectory = new INodeUnderlyingDirectory(namesystem.allocateNewInodeId(), DFSUtil.string2Bytes(subdirectory), master.getPermissionStatus(), master.getAccessTime());
+	  } else {
+		  for (INode inode: parent.getChildrenList()) {
+			  if (inode.getLocalName().equals(subdirectory)) {
+				  underlyingDirectory = (INodeUnderlyingDirectory) inode;
+			  }
+		  }
+	  }
+	  
+	  if (underlyingDirectory != null) {
+		  NameNode.LOG.info("--- MPSR ---: mkdirUnderlying() : Setting up underlying directory parent [parent = '" + parent + "']."); 
+		  underlyingDirectory.setParent(parent);
+		  parent.addChild(underlyingDirectory);
+		  master.addUnderlyingDirectory(partitioning, underlyingDirectory);
+	  }
+	  
+	  return underlyingDirectory != null ? underlyingDirectory : parent;
+  }
   
   
   
@@ -2311,17 +2404,44 @@ public class FSDirectory implements Closeable {
     updateCount(iip, pos,
         counts.get(Quota.NAMESPACE), counts.get(Quota.DISKSPACE), checkQuota);*/
     boolean isRename = (child.getParent() != null);
-    NameNode.LOG.info("--- MPSR ---: addChildMpsr() : Getting parent [pos = '" + pos + ", iip = '" + iip.toString() + "''].");
 
-    final INodeUnderlyingDirectory parent = (INodeUnderlyingDirectory) inodes[pos-1];
-    boolean added;
-    try {
-      added = parent.addChild(child, true, iip.getLatestSnapshotId());
-    } catch (QuotaExceededException e) {
-      /*updateCountNoQuotaCheck(iip, pos,
-          -counts.get(Quota.NAMESPACE), -counts.get(Quota.DISKSPACE));*/
-      throw e;
-    }
+    boolean added = false;
+    NameNode.LOG.info("--- MPSR ---: addChildMpsr() : Getting parent for directory [pos = '" + pos + "'].");
+    if (inodes[pos-1] instanceof INodeDirectory) {
+        NameNode.LOG.info("--- MPSR ---: addChildMpsr() : Getting parent for directory [iip = '" + iip.toString() + "'].");
+	    final INodeDirectory parent = inodes[pos-1].asDirectory();
+	    try {
+	      added = parent.addChild(child, true, iip.getLatestSnapshotId());
+	      NameNode.LOG.info("--- MPSR ---: addChildMpsr() : Adding child to '" + parent.getLocalName() + "' result = "+ added);
+	    } catch (QuotaExceededException e) {
+	      /*updateCountNoQuotaCheck(iip, pos,
+	          -counts.get(Quota.NAMESPACE), -counts.get(Quota.DISKSPACE));*/
+	      throw e;
+	    }
+    } else {
+    	if (inodes[pos-1] == null) {
+    		final INodeDirectory parent = getRoot();
+    	    try {
+    	      added = parent.addChild(child, true, iip.getLatestSnapshotId());
+    	      NameNode.LOG.info("--- MPSR ---: addChildMpsr() : Adding child to root '" + parent.getLocalName() + "' result = "+ added);
+    	    } catch (QuotaExceededException e) {
+    	      /*updateCountNoQuotaCheck(iip, pos,
+    	          -counts.get(Quota.NAMESPACE), -counts.get(Quota.DISKSPACE));*/
+    	      throw e;
+    	    }
+    	} else {
+    		NameNode.LOG.info("--- MPSR ---: addChildMpsr() : Parent class " + inodes[pos-1].getClass());
+    	}
+    }/*else if (inodes[pos-1] instanceof INodeUnderlyingDirectory) {
+    	NameNode.LOG.info("--- MPSR ---: addChildMpsr() : Getting parent for underlying directory [pos = '" + pos + ", iip = '" + iip.toString() + "''].");
+	    final INodeUnderlyingDirectory parent = (INodeUnderlyingDirectory) inodes[pos-1];
+	    try {
+	      added = parent.addChild(child, true, iip.getLatestSnapshotId());
+	    } catch (QuotaExceededException e) {
+	      throw e;
+	    }
+    }*/
+    
     if (!added) {
       /*updateCountNoQuotaCheck(iip, pos,
           -counts.get(Quota.NAMESPACE), -counts.get(Quota.DISKSPACE));*/
