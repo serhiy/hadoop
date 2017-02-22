@@ -89,7 +89,7 @@ public abstract class Event {
   public static class CreateEvent extends Event {
 
     public static enum INodeType {
-      FILE, DIRECTORY, SYMLINK;
+      FILE, DIRECTORY, SYMLINK, UNDERLYING_DIRECTORY;
     }
 
     private INodeType iNodeType;

@@ -2492,6 +2492,8 @@ public class PBHelper {
     switch (type) {
     case I_TYPE_DIRECTORY:
       return Event.CreateEvent.INodeType.DIRECTORY;
+    case I_TYPE_UNDERLYING_DIRECTORY:
+        return Event.CreateEvent.INodeType.UNDERLYING_DIRECTORY;
     case I_TYPE_FILE:
       return Event.CreateEvent.INodeType.FILE;
     case I_TYPE_SYMLINK:
@@ -2544,6 +2546,8 @@ public class PBHelper {
   private static InotifyProtos.INodeType createTypeConvert(Event.CreateEvent.INodeType
       type) {
     switch (type) {
+    case UNDERLYING_DIRECTORY:
+        return InotifyProtos.INodeType.I_TYPE_UNDERLYING_DIRECTORY;
     case DIRECTORY:
       return InotifyProtos.INodeType.I_TYPE_DIRECTORY;
     case FILE:

@@ -263,6 +263,9 @@ public final class FSImageFormatProtobuf {
         case INODE_DIR:
           inodeLoader.loadINodeDirectorySection(in);
           break;
+        case INODE_UNDERLYING_DIR:
+            inodeLoader.loadINodeUnderlyingDirectorySection(in);
+            break;
         case FILES_UNDERCONSTRUCTION:
           inodeLoader.loadFilesUnderConstructionSection(in);
           break;
@@ -292,6 +295,10 @@ public final class FSImageFormatProtobuf {
           break;
         }
       }
+      
+      //inodeLoader.finalizeUnderlyingSetup();
+
+      //fsn.printFS();
     }
 
     private void loadNameSystemSection(InputStream in) throws IOException {
@@ -435,6 +442,7 @@ public final class FSImageFormatProtobuf {
 
       saver.serializeINodeSection(sectionOutputStream);
       saver.serializeINodeDirectorySection(sectionOutputStream);
+      saver.serializeIUnderlyingNodeDirectorySection(sectionOutputStream);
       saver.serializeFilesUCSection(sectionOutputStream);
     }
 
@@ -591,6 +599,7 @@ public final class FSImageFormatProtobuf {
     INODE_REFERENCE("INODE_REFERENCE"),
     SNAPSHOT("SNAPSHOT"),
     INODE_DIR("INODE_DIR"),
+    INODE_UNDERLYING_DIR("INODE_UNDERLYING_DIR"),
     FILES_UNDERCONSTRUCTION("FILES_UNDERCONSTRUCTION"),
     SNAPSHOT_DIFF("SNAPSHOT_DIFF"),
     SECRET_MANAGER("SECRET_MANAGER"),

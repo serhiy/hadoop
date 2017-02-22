@@ -57,6 +57,7 @@ enum INodeType {
   I_TYPE_FILE = 0x0;
   I_TYPE_DIRECTORY = 0x1;
   I_TYPE_SYMLINK = 0x2;
+  I_TYPE_UNDERLYING_DIRECTORY = 0x3;
 }
 
 enum MetadataUpdateType {

@@ -55,7 +55,7 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]> {
   public static final Log LOG = LogFactory.getLog(INode.class);
 
   /** parent is either an {@link INodeDirectory} or an {@link INodeReference}.*/
-  private INode parent = null;
+  protected INode parent = null;
   
   INode(INode parent) {
     this.parent = parent;
@@ -333,6 +333,13 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]> {
    * Check whether it's a directory
    */
   public boolean isDirectory() {
+    return false;
+  }
+  
+  /**
+   * Check whether it's a directory
+   */
+  public boolean isUnderlyingDirectory() {
     return false;
   }
   

@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
@@ -93,7 +94,6 @@ import org.apache.hadoop.hdfs.util.ByteArray;
 import org.apache.hadoop.hdfs.util.ChunkedArrayList;
 import org.apache.hadoop.hdfs.util.ReadOnlyList;
 import org.apache.hadoop.security.AccessControlException;
-import org.mortbay.log.Log;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -125,7 +125,10 @@ public class FSDirectory implements Closeable {
     r.setSnapshotQuota(0);
     // add underlying directories to ROOT
     for (int i = 0; i < MPSRPartitioningProvider.NUM_PARTITIONS; i++) {
-    	r.addUnderlyingDirectory(i, new INodeUnderlyingDirectory(namesystem.allocateNewInodeId(), INodeDirectory.ROOT_NAME, namesystem.createFsOwnerPermissions(new FsPermission((short) 0755)), 0L));
+    	INodeUnderlyingDirectory iNodeUnderlyingDirectory = new INodeUnderlyingDirectory(namesystem.allocateNewInodeId(), INodeDirectory.ROOT_NAME, namesystem.createFsOwnerPermissions(new FsPermission((short) 0755)), 0L);
+    	iNodeUnderlyingDirectory.setPartitioning(i);
+    	iNodeUnderlyingDirectory.setMaster(r);
+    	r.addUnderlyingDirectory(i, iNodeUnderlyingDirectory);
     }
     return r;
   }
@@ -209,6 +212,10 @@ public class FSDirectory implements Closeable {
     this.dirLock = new ReentrantReadWriteLock(true); // fair
     rootDir = createRoot(ns);
     inodeMap = INodeMap.newInstance(rootDir);
+    for (int count = 0; count < MPSRPartitioningProvider.NUM_PARTITIONS; count++) {
+    	addToInodeMap(rootDir.getUnderlyingDirectory(count));
+    }
+    
     int configuredLimit = conf.getInt(
         DFSConfigKeys.DFS_LIST_LIMIT, DFSConfigKeys.DFS_LIST_LIMIT_DEFAULT);
     this.lsLimit = configuredLimit>0 ?
@@ -2057,6 +2064,10 @@ public class FSDirectory implements Closeable {
 			  }
 		  }
 		  underlyingDirectory = new INodeUnderlyingDirectory(namesystem.allocateNewInodeId(), DFSUtil.string2Bytes(subdirectory), master.getPermissionStatus(), master.getAccessTime());
+		  underlyingDirectory.setPartitioning(partitioning);
+		  underlyingDirectory.setMaster(master);
+		  
+		  addToInodeMap(underlyingDirectory);
 	  } else {
 		  for (INode inode: parent.getChildrenList()) {
 			  if (inode.getLocalName().equals(subdirectory)) {
@@ -2616,6 +2627,25 @@ public class FSDirectory implements Closeable {
       readUnlock();
     }
   }
+  
+  public List<INode> getInodesByMasterId(long id) {
+	    readLock();
+	    List<INode> ret = new ArrayList<INode>();
+	    try {
+	    	Iterator<INodeWithAdditionalFields> mapIterator = inodeMap.getMapIterator();
+	    	while (mapIterator.hasNext()) {
+	    		INode inode = mapIterator.next();
+	    		if (inode.isUnderlyingDirectory()) {
+	    			if (((INodeUnderlyingDirectory)inode).getMaster().getId() == id) {
+	    				ret.add(inode);
+	    			}
+	    		}
+	    	}
+	      return ret;
+	    } finally {
+	      readUnlock();
+	    }
+	  }
   
   @VisibleForTesting
   int getInodeMapSize() {

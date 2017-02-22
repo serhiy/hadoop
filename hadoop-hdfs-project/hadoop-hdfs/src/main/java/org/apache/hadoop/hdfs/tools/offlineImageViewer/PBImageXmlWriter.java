@@ -43,6 +43,8 @@ import org.apache.hadoop.hdfs.server.namenode.FsImageProto.INodeDirectorySection
 import org.apache.hadoop.hdfs.server.namenode.FsImageProto.INodeSection;
 import org.apache.hadoop.hdfs.server.namenode.FsImageProto.INodeSection.INodeDirectory;
 import org.apache.hadoop.hdfs.server.namenode.FsImageProto.INodeSection.INodeSymlink;
+import org.apache.hadoop.hdfs.server.namenode.FsImageProto.INodeSection.INodeUnderlyingDirectory;
+import org.apache.hadoop.hdfs.server.namenode.FsImageProto.INodeUnderlyingDirectorySection;
 import org.apache.hadoop.hdfs.server.namenode.FsImageProto.INodeReferenceSection;
 import org.apache.hadoop.hdfs.server.namenode.FsImageProto.NameSystemSection;
 import org.apache.hadoop.hdfs.server.namenode.FsImageProto.SecretManagerSection;
@@ -120,6 +122,9 @@ public final class PBImageXmlWriter {
         case INODE_DIR:
           dumpINodeDirectorySection(is);
           break;
+        case INODE_UNDERLYING_DIR:
+            dumpINodeUnderlyingDirectorySection(is);
+            break;
         case FILES_UNDERCONSTRUCTION:
           dumpFileUnderConstructionSection(is);
           break;
@@ -198,6 +203,18 @@ public final class PBImageXmlWriter {
       o("nsquota", d.getNsQuota()).o("dsquota", d.getDsQuota());
     }
   }
+  
+  private void dumpINodeUnderlyingDirectory(INodeUnderlyingDirectory d) {
+	    o("mtime", d.getModificationTime()).o("permission",
+	        dumpPermission(d.getPermission()));
+
+	    if (d.hasDsQuota() && d.hasNsQuota()) {
+	      o("nsquota", d.getNsQuota()).o("dsquota", d.getDsQuota());
+	    }
+	    
+	    o("master", d.getMaster());
+	    o("partitioning", d.getPartitioning());
+	  }
 
   private void dumpINodeDirectorySection(InputStream in) throws IOException {
     out.print("<INodeDirectorySection>");
@@ -220,6 +237,30 @@ public final class PBImageXmlWriter {
     }
     out.print("</INodeDirectorySection>\n");
   }
+  
+  private void dumpINodeUnderlyingDirectorySection(InputStream in) throws IOException {
+	    out.print("<INodeUnderlyingDirectorySection>");
+	    while (true) {
+	      INodeUnderlyingDirectorySection.UnderlyingDirEntry e = INodeUnderlyingDirectorySection.UnderlyingDirEntry.parseDelimitedFrom(in);
+	      // note that in is a LimitedInputStream
+	      if (e == null) {
+	        break;
+	      }
+	      out.print("<underlyingDirectory>");
+	      //o("id", e.getId());
+	      o("parent", e.getParent());
+	      //o("master", e.getMaster());
+	      //o("partitioning", e.getPartitioning());
+	      for (long id : e.getChildrenList()) {
+	        o("inode", id);
+	      }
+	      for (int refId : e.getRefChildrenList()) {
+	        o("inodereference-index", refId);
+	      }
+	      out.print("</underlyingDirectory>\n");
+	    }
+	    out.print("</INodeUnderlyingDirectorySection>\n");
+	  }
 
   private void dumpINodeReferenceSection(InputStream in) throws IOException {
     out.print("<INodeReferenceSection>");
@@ -284,7 +325,9 @@ public final class PBImageXmlWriter {
         dumpINodeDirectory(p.getDirectory());
       } else if (p.hasSymlink()) {
         dumpINodeSymlink(p.getSymlink());
-      }
+      } else if (p.hasUnderlyingDirectory()) {
+          dumpINodeUnderlyingDirectory(p.getUnderlyingDirectory());
+        }
 
       out.print("</inode>\n");
     }

@@ -10,8 +10,6 @@ import org.apache.hadoop.fs.permission.PermissionStatus;
 import org.apache.hadoop.hdfs.DFSUtil;
 import org.apache.hadoop.hdfs.protocol.QuotaExceededException;
 import org.apache.hadoop.hdfs.server.namenode.Quota.Counts;
-import org.apache.hadoop.hdfs.server.namenode.snapshot.DirectoryWithSnapshotFeature;
-import org.apache.hadoop.hdfs.server.namenode.snapshot.Snapshot;
 import org.apache.hadoop.hdfs.util.ReadOnlyList;
 
 public class INodeUnderlyingDirectory extends INodeWithAdditionalFields implements INodeDirectoryAttributes {
@@ -20,7 +18,8 @@ public class INodeUnderlyingDirectory extends INodeWithAdditionalFields implemen
 	final static byte[] ROOT_NAME = DFSUtil.string2Bytes("");
 
 	private List<INode> children = null;
-	private INodeDirectory masterDirectory;
+	private INodeDirectory master;
+	private int partitioning;
 
 	/** constructor */
 	public INodeUnderlyingDirectory(long id, byte[] name, PermissionStatus permissions, long mtime) {
@@ -102,12 +101,12 @@ public class INodeUnderlyingDirectory extends INodeWithAdditionalFields implemen
 		return (INodeUnderlyingDirectory) inode;
 	}
 
-	public INodeDirectory getMasterDirectory() {
-		return masterDirectory;
+	public INodeDirectory getMaster() {
+		return master;
 	}
 
-	public void setMasterDirectory(INodeDirectory masterDirectory) {
-		this.masterDirectory = masterDirectory;
+	public void setMaster(INodeDirectory master) {
+		this.master = master;
 	}
 
 	int searchChildren(byte[] name) {
@@ -116,6 +115,11 @@ public class INodeUnderlyingDirectory extends INodeWithAdditionalFields implemen
 
 	private ReadOnlyList<INode> getCurrentChildrenList() {
 		return children == null ? ReadOnlyList.Util.<INode> emptyList() : ReadOnlyList.Util.asReadOnlyList(children);
+	}
+	
+	@Override
+	public boolean isUnderlyingDirectory() {
+		return true;
 	}
 
 	/**
@@ -209,7 +213,7 @@ public class INodeUnderlyingDirectory extends INodeWithAdditionalFields implemen
 		}
 
 		// Increment the directory count for this directory.
-		summary.getCounts().add(Content.DIRECTORY, 1);
+		summary.getCounts().add(Content.UNDERLYING_DIRECTORY, 1);
 		// Relinquish and reacquire locks if necessary.
 		summary.yield();
 		return summary;
@@ -238,4 +242,19 @@ public class INodeUnderlyingDirectory extends INodeWithAdditionalFields implemen
       final int i = ReadOnlyList.Util.binarySearch(c, name);
       return i < 0 ? null : c.get(i);
     }
+	
+	public INodeUnderlyingDirectory getUParent() {
+		if (parent!=null && !(parent instanceof INodeUnderlyingDirectory)) {
+			throw new IllegalStateException("--- MPSR ---: getUParent() : Parent is not an instance of INodeUnderlyingDirectory[parentId = " + parent.getId() + "]!");
+		}
+		return (INodeUnderlyingDirectory) parent;
+	}
+
+	public int getPartitioning() {
+		return partitioning;
+	}
+
+	public void setPartitioning(int partitioning) {
+		this.partitioning = partitioning;
+	}
 }

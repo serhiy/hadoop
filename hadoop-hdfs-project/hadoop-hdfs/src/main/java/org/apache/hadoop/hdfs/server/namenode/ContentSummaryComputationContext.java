@@ -79,6 +79,7 @@ public class ContentSummaryComputationContext {
     long currentCount = counts.get(Content.FILE) +
         counts.get(Content.SYMLINK) +
         counts.get(Content.DIRECTORY) +
+        counts.get(Content.UNDERLYING_DIRECTORY) +
         counts.get(Content.SNAPSHOTTABLE_DIRECTORY);
     if (currentCount <= nextCountLimit) {
       return false;

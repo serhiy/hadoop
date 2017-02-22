@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -30,13 +31,13 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.HadoopIllegalArgumentException;
 import org.apache.hadoop.classification.InterfaceAudience;
+import org.apache.hadoop.fs.XAttr;
 import org.apache.hadoop.fs.permission.AclEntry;
 import org.apache.hadoop.fs.permission.AclEntryScope;
 import org.apache.hadoop.fs.permission.AclEntryType;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.fs.permission.PermissionStatus;
-import org.apache.hadoop.fs.XAttr;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.BlockProto;
 import org.apache.hadoop.hdfs.protocolPB.PBHelper;
@@ -52,6 +53,7 @@ import org.apache.hadoop.hdfs.server.namenode.FsImageProto.INodeSection;
 import org.apache.hadoop.hdfs.server.namenode.FsImageProto.INodeSection.AclFeatureProto;
 import org.apache.hadoop.hdfs.server.namenode.FsImageProto.INodeSection.XAttrCompactProto;
 import org.apache.hadoop.hdfs.server.namenode.FsImageProto.INodeSection.XAttrFeatureProto;
+import org.apache.hadoop.hdfs.server.namenode.FsImageProto.INodeUnderlyingDirectorySection;
 import org.apache.hadoop.hdfs.server.namenode.snapshot.Snapshot;
 import org.apache.hadoop.hdfs.util.ReadOnlyList;
 
@@ -59,544 +61,684 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.protobuf.ByteString;
 
+import cern.mpe.hadoop.hdfs.server.namenode.MPSRPartitioningProvider;
+
 @InterfaceAudience.Private
 public final class FSImageFormatPBINode {
-  private final static long USER_GROUP_STRID_MASK = (1 << 24) - 1;
-  private final static int USER_STRID_OFFSET = 40;
-  private final static int GROUP_STRID_OFFSET = 16;
-  private static final Log LOG = LogFactory.getLog(FSImageFormatPBINode.class);
+	private final static long USER_GROUP_STRID_MASK = (1 << 24) - 1;
+	private final static int USER_STRID_OFFSET = 40;
+	private final static int GROUP_STRID_OFFSET = 16;
+	private static final Log LOG = LogFactory.getLog(FSImageFormatPBINode.class);
 
-  private static final int ACL_ENTRY_NAME_MASK = (1 << 24) - 1;
-  private static final int ACL_ENTRY_NAME_OFFSET = 6;
-  private static final int ACL_ENTRY_TYPE_OFFSET = 3;
-  private static final int ACL_ENTRY_SCOPE_OFFSET = 5;
-  private static final int ACL_ENTRY_PERM_MASK = 7;
-  private static final int ACL_ENTRY_TYPE_MASK = 3;
-  private static final int ACL_ENTRY_SCOPE_MASK = 1;
-  private static final FsAction[] FSACTION_VALUES = FsAction.values();
-  private static final AclEntryScope[] ACL_ENTRY_SCOPE_VALUES = AclEntryScope
-      .values();
-  private static final AclEntryType[] ACL_ENTRY_TYPE_VALUES = AclEntryType
-      .values();
-  
-  private static final int XATTR_NAMESPACE_MASK = 3;
-  private static final int XATTR_NAMESPACE_OFFSET = 30;
-  private static final int XATTR_NAME_MASK = (1 << 24) - 1;
-  private static final int XATTR_NAME_OFFSET = 6;
+	private static final int ACL_ENTRY_NAME_MASK = (1 << 24) - 1;
+	private static final int ACL_ENTRY_NAME_OFFSET = 6;
+	private static final int ACL_ENTRY_TYPE_OFFSET = 3;
+	private static final int ACL_ENTRY_SCOPE_OFFSET = 5;
+	private static final int ACL_ENTRY_PERM_MASK = 7;
+	private static final int ACL_ENTRY_TYPE_MASK = 3;
+	private static final int ACL_ENTRY_SCOPE_MASK = 1;
+	private static final FsAction[] FSACTION_VALUES = FsAction.values();
+	private static final AclEntryScope[] ACL_ENTRY_SCOPE_VALUES = AclEntryScope.values();
+	private static final AclEntryType[] ACL_ENTRY_TYPE_VALUES = AclEntryType.values();
 
-  /* See the comments in fsimage.proto for an explanation of the following. */
-  private static final int XATTR_NAMESPACE_EXT_OFFSET = 5;
-  private static final int XATTR_NAMESPACE_EXT_MASK = 1;
+	private static final int XATTR_NAMESPACE_MASK = 3;
+	private static final int XATTR_NAMESPACE_OFFSET = 30;
+	private static final int XATTR_NAME_MASK = (1 << 24) - 1;
+	private static final int XATTR_NAME_OFFSET = 6;
 
-  private static final XAttr.NameSpace[] XATTR_NAMESPACE_VALUES =
-      XAttr.NameSpace.values();
-  
+	/* See the comments in fsimage.proto for an explanation of the following. */
+	private static final int XATTR_NAMESPACE_EXT_OFFSET = 5;
+	private static final int XATTR_NAMESPACE_EXT_MASK = 1;
 
-  public final static class Loader {
-    public static PermissionStatus loadPermission(long id,
-        final String[] stringTable) {
-      short perm = (short) (id & ((1 << GROUP_STRID_OFFSET) - 1));
-      int gsid = (int) ((id >> GROUP_STRID_OFFSET) & USER_GROUP_STRID_MASK);
-      int usid = (int) ((id >> USER_STRID_OFFSET) & USER_GROUP_STRID_MASK);
-      return new PermissionStatus(stringTable[usid], stringTable[gsid],
-          new FsPermission(perm));
-    }
+	private static final XAttr.NameSpace[] XATTR_NAMESPACE_VALUES = XAttr.NameSpace.values();
 
-    public static ImmutableList<AclEntry> loadAclEntries(
-        AclFeatureProto proto, final String[] stringTable) {
-      ImmutableList.Builder<AclEntry> b = ImmutableList.builder();
-      for (int v : proto.getEntriesList()) {
-        int p = v & ACL_ENTRY_PERM_MASK;
-        int t = (v >> ACL_ENTRY_TYPE_OFFSET) & ACL_ENTRY_TYPE_MASK;
-        int s = (v >> ACL_ENTRY_SCOPE_OFFSET) & ACL_ENTRY_SCOPE_MASK;
-        int nid = (v >> ACL_ENTRY_NAME_OFFSET) & ACL_ENTRY_NAME_MASK;
-        String name = stringTable[nid];
-        b.add(new AclEntry.Builder().setName(name)
-            .setPermission(FSACTION_VALUES[p])
-            .setScope(ACL_ENTRY_SCOPE_VALUES[s])
-            .setType(ACL_ENTRY_TYPE_VALUES[t]).build());
-      }
-      return b.build();
-    }
-    
-    public static ImmutableList<XAttr> loadXAttrs(
-        XAttrFeatureProto proto, final String[] stringTable) {
-      ImmutableList.Builder<XAttr> b = ImmutableList.builder();
-      for (XAttrCompactProto xAttrCompactProto : proto.getXAttrsList()) {
-        int v = xAttrCompactProto.getName();
-        int nid = (v >> XATTR_NAME_OFFSET) & XATTR_NAME_MASK;
-        int ns = (v >> XATTR_NAMESPACE_OFFSET) & XATTR_NAMESPACE_MASK;
-        ns |=
-            ((v >> XATTR_NAMESPACE_EXT_OFFSET) & XATTR_NAMESPACE_EXT_MASK) << 2;
-        String name = stringTable[nid];
-        byte[] value = null;
-        if (xAttrCompactProto.getValue() != null) {
-          value = xAttrCompactProto.getValue().toByteArray();
-        }
-        b.add(new XAttr.Builder().setNameSpace(XATTR_NAMESPACE_VALUES[ns])
-            .setName(name).setValue(value).build());
-      }
-      
-      return b.build();
-    }
+	public final static class Loader {
+		public static PermissionStatus loadPermission(long id, final String[] stringTable) {
+			short perm = (short) (id & ((1 << GROUP_STRID_OFFSET) - 1));
+			int gsid = (int) ((id >> GROUP_STRID_OFFSET) & USER_GROUP_STRID_MASK);
+			int usid = (int) ((id >> USER_STRID_OFFSET) & USER_GROUP_STRID_MASK);
+			return new PermissionStatus(stringTable[usid], stringTable[gsid], new FsPermission(perm));
+		}
 
-    public static INodeDirectory loadINodeDirectory(INodeSection.INode n,
-        LoaderContext state) {
-      assert n.getType() == INodeSection.INode.Type.DIRECTORY;
-      INodeSection.INodeDirectory d = n.getDirectory();
+		public static ImmutableList<AclEntry> loadAclEntries(AclFeatureProto proto, final String[] stringTable) {
+			ImmutableList.Builder<AclEntry> b = ImmutableList.builder();
+			for (int v : proto.getEntriesList()) {
+				int p = v & ACL_ENTRY_PERM_MASK;
+				int t = (v >> ACL_ENTRY_TYPE_OFFSET) & ACL_ENTRY_TYPE_MASK;
+				int s = (v >> ACL_ENTRY_SCOPE_OFFSET) & ACL_ENTRY_SCOPE_MASK;
+				int nid = (v >> ACL_ENTRY_NAME_OFFSET) & ACL_ENTRY_NAME_MASK;
+				String name = stringTable[nid];
+				b.add(new AclEntry.Builder().setName(name).setPermission(FSACTION_VALUES[p])
+						.setScope(ACL_ENTRY_SCOPE_VALUES[s]).setType(ACL_ENTRY_TYPE_VALUES[t]).build());
+			}
+			return b.build();
+		}
 
-      final PermissionStatus permissions = loadPermission(d.getPermission(),
-          state.getStringTable());
-      final INodeDirectory dir = new INodeDirectory(n.getId(), n.getName()
-          .toByteArray(), permissions, d.getModificationTime());
+		public static ImmutableList<XAttr> loadXAttrs(XAttrFeatureProto proto, final String[] stringTable) {
+			ImmutableList.Builder<XAttr> b = ImmutableList.builder();
+			for (XAttrCompactProto xAttrCompactProto : proto.getXAttrsList()) {
+				int v = xAttrCompactProto.getName();
+				int nid = (v >> XATTR_NAME_OFFSET) & XATTR_NAME_MASK;
+				int ns = (v >> XATTR_NAMESPACE_OFFSET) & XATTR_NAMESPACE_MASK;
+				ns |= ((v >> XATTR_NAMESPACE_EXT_OFFSET) & XATTR_NAMESPACE_EXT_MASK) << 2;
+				String name = stringTable[nid];
+				byte[] value = null;
+				if (xAttrCompactProto.getValue() != null) {
+					value = xAttrCompactProto.getValue().toByteArray();
+				}
+				b.add(new XAttr.Builder().setNameSpace(XATTR_NAMESPACE_VALUES[ns]).setName(name).setValue(value)
+						.build());
+			}
 
-      final long nsQuota = d.getNsQuota(), dsQuota = d.getDsQuota();
-      if (nsQuota >= 0 || dsQuota >= 0) {
-        dir.addDirectoryWithQuotaFeature(nsQuota, dsQuota);
-      }
+			return b.build();
+		}
+		
+		private static Map<Long, Long> inodeMasterRelations = new HashMap<Long, Long>();
+		
+		public static INodeUnderlyingDirectory loadINodeUnderlyingDirectory(INodeSection.INode n, LoaderContext state) {
+			assert n.getType() == INodeSection.INode.Type.UNDERLYING_DIRECTORY;
+			INodeSection.INodeUnderlyingDirectory d = n.getUnderlyingDirectory();
 
-      if (d.hasAcl()) {
-        dir.addAclFeature(new AclFeature(loadAclEntries(d.getAcl(),
-            state.getStringTable())));
-      }
-      if (d.hasXAttrs()) {
-        dir.addXAttrFeature(new XAttrFeature(
-            loadXAttrs(d.getXAttrs(), state.getStringTable())));
-      }
-      return dir;
-    }
+			final PermissionStatus permissions = loadPermission(d.getPermission(), state.getStringTable());
+			final INodeUnderlyingDirectory dir = new INodeUnderlyingDirectory(n.getId(), n.getName().toByteArray(), permissions,
+					d.getModificationTime());
+			
+			dir.setPartitioning(d.getPartitioning());
+			
+			inodeMasterRelations.put(n.getId(), d.getMaster());
 
-    public static void updateBlocksMap(INodeFile file, BlockManager bm) {
-      // Add file->block mapping
-      final BlockInfo[] blocks = file.getBlocks();
-      if (blocks != null) {
-        for (int i = 0; i < blocks.length; i++) {
-          file.setBlock(i, bm.addBlockCollection(blocks[i], file));
-        }
-      }
-    }
+			/*final long nsQuota = d.getNsQuota(), dsQuota = d.getDsQuota();
+			if (nsQuota >= 0 || dsQuota >= 0) {
+				dir.addDirectoryWithQuotaFeature(nsQuota, dsQuota);
+			}
 
-    private final FSDirectory dir;
-    private final FSNamesystem fsn;
-    private final FSImageFormatProtobuf.Loader parent;
-    private final List<INodeFile> ucFiles;
+			if (d.hasAcl()) {
+				dir.addAclFeature(new AclFeature(loadAclEntries(d.getAcl(), state.getStringTable())));
+			}
+			if (d.hasXAttrs()) {
+				dir.addXAttrFeature(new XAttrFeature(loadXAttrs(d.getXAttrs(), state.getStringTable())));
+			}*/
+			return dir;
+		}
 
-    Loader(FSNamesystem fsn, final FSImageFormatProtobuf.Loader parent) {
-      this.fsn = fsn;
-      this.dir = fsn.dir;
-      this.parent = parent;
-      this.ucFiles = new ArrayList<INodeFile>();
-    }
+		public static INodeDirectory loadINodeDirectory(INodeSection.INode n, LoaderContext state) {
+			assert n.getType() == INodeSection.INode.Type.DIRECTORY;
+			INodeSection.INodeDirectory d = n.getDirectory();
 
-    void loadINodeDirectorySection(InputStream in) throws IOException {
-      final List<INodeReference> refList = parent.getLoaderContext()
-          .getRefList();
-      while (true) {
-        INodeDirectorySection.DirEntry e = INodeDirectorySection.DirEntry
-            .parseDelimitedFrom(in);
-        // note that in is a LimitedInputStream
-        if (e == null) {
-          break;
-        }
-        INodeDirectory p = dir.getInode(e.getParent()).asDirectory();
-        for (long id : e.getChildrenList()) {
-          INode child = dir.getInode(id);
-          addToParent(p, child);
-        }
-        for (int refId : e.getRefChildrenList()) {
-          INodeReference ref = refList.get(refId);
-          addToParent(p, ref);
-        }
-      }
-    }
+			final PermissionStatus permissions = loadPermission(d.getPermission(), state.getStringTable());
+			final INodeDirectory dir = new INodeDirectory(n.getId(), n.getName().toByteArray(), permissions,
+					d.getModificationTime());
 
-    void loadINodeSection(InputStream in) throws IOException {
-      INodeSection s = INodeSection.parseDelimitedFrom(in);
-      fsn.resetLastInodeId(s.getLastInodeId());
-      LOG.info("Loading " + s.getNumInodes() + " INodes.");
-      for (int i = 0; i < s.getNumInodes(); ++i) {
-        INodeSection.INode p = INodeSection.INode.parseDelimitedFrom(in);
-        if (p.getId() == INodeId.ROOT_INODE_ID) {
-          loadRootINode(p);
-        } else {
-          INode n = loadINode(p);
-          dir.addToInodeMap(n);
-        }
-      }
-    }
+			final long nsQuota = d.getNsQuota(), dsQuota = d.getDsQuota();
+			if (nsQuota >= 0 || dsQuota >= 0) {
+				dir.addDirectoryWithQuotaFeature(nsQuota, dsQuota);
+			}
 
-    /**
-     * Load the under-construction files section, and update the lease map
-     */
-    void loadFilesUnderConstructionSection(InputStream in) throws IOException {
-     // This section is consumed, but not actually used for restoring leases.
-      while (true) {
-        FileUnderConstructionEntry entry = FileUnderConstructionEntry
-            .parseDelimitedFrom(in);
-        if (entry == null) {
-          break;
-        }
-      }
+			if (d.hasAcl()) {
+				dir.addAclFeature(new AclFeature(loadAclEntries(d.getAcl(), state.getStringTable())));
+			}
+			if (d.hasXAttrs()) {
+				dir.addXAttrFeature(new XAttrFeature(loadXAttrs(d.getXAttrs(), state.getStringTable())));
+			}
+			return dir;
+		}
 
-      // Add a lease for each and every file under construction.
-      for (INodeFile file : ucFiles) {
-        FileUnderConstructionFeature uc = file.getFileUnderConstructionFeature();
-        Preconditions.checkState(uc != null); // file must be under-construction
-        String path = file.getFullPathName();
-        // Skip the deleted files in snapshot. This leaks UC inodes that are
-        // deleted from the current view.
-        if (path.startsWith("/")) {
-          fsn.leaseManager.addLease(uc.getClientName(), path);
-        }
-      }
-    }
+		public static void updateBlocksMap(INodeFile file, BlockManager bm) {
+			// Add file->block mapping
+			final BlockInfo[] blocks = file.getBlocks();
+			if (blocks != null) {
+				for (int i = 0; i < blocks.length; i++) {
+					file.setBlock(i, bm.addBlockCollection(blocks[i], file));
+				}
+			}
+		}
 
-    private void addToParent(INodeDirectory parent, INode child) {
-      if (parent == dir.rootDir && FSDirectory.isReservedName(child)) {
-        throw new HadoopIllegalArgumentException("File name \""
-            + child.getLocalName() + "\" is reserved. Please "
-            + " change the name of the existing file or directory to another "
-            + "name before upgrading to this release.");
-      }
-      // NOTE: This does not update space counts for parents
-      if (!parent.addChild(child)) {
-        return;
-      }
-      dir.cacheName(child);
+		private final FSDirectory dir;
+		private final FSNamesystem fsn;
+		private final FSImageFormatProtobuf.Loader parent;
+		private final List<INodeFile> ucFiles;
 
-      if (child.isFile()) {
-        updateBlocksMap(child.asFile(), fsn.getBlockManager());
-      }
-    }
+		Loader(FSNamesystem fsn, final FSImageFormatProtobuf.Loader parent) {
+			this.fsn = fsn;
+			this.dir = fsn.dir;
+			this.parent = parent;
+			this.ucFiles = new ArrayList<INodeFile>();
+		}
+		
+		void finalizeUnderlyingSetup() {
+			LOG.info("--- MPSR ---: finalizeUnderlyingSetup() : Finalizing underlying setup.");
+			Iterator<INodeWithAdditionalFields> it = dir.getINodeMap().getMapIterator();
+			while (it.hasNext()) {
+				INode inode = it.next();
+				if (inode.isUnderlyingDirectory()) {
+					if (((INodeUnderlyingDirectory)inode).getMaster() != null) {
+						INodeDirectory master = (INodeDirectory) dir.getInode(((INodeUnderlyingDirectory)inode).getMaster().getId());
+						master.addUnderlyingDirectory(((INodeUnderlyingDirectory)inode).getPartitioning(), ((INodeUnderlyingDirectory)inode));
+					} else {
+						LOG.info("--- MPSR ---: finalizeUnderlyingSetup() : Udir [id = "+inode.getId()+", name = "+inode.getLocalName()+"] dooes not have master :S?");
+					}
+				}
+			}
+			LOG.info("--- MPSR ---: finalizeUnderlyingSetup() : Lets hope its done :D.");
+		}
 
-    private INode loadINode(INodeSection.INode n) {
-      switch (n.getType()) {
-      case FILE:
-        return loadINodeFile(n);
-      case DIRECTORY:
-        return loadINodeDirectory(n, parent.getLoaderContext());
-      case SYMLINK:
-        return loadINodeSymlink(n);
-      default:
-        break;
-      }
-      return null;
-    }
+		void loadINodeDirectorySection(InputStream in) throws IOException {
+			final List<INodeReference> refList = parent.getLoaderContext().getRefList();
+			while (true) {
+				INodeDirectorySection.DirEntry e = INodeDirectorySection.DirEntry.parseDelimitedFrom(in);
+				// note that in is a LimitedInputStream
+				if (e == null) {
+					break;
+				}
+				INodeDirectory p = dir.getInode(e.getParent()).asDirectory();
+				for (long id : e.getChildrenList()) {
+					INode child = dir.getInode(id);
+					addToParent(p, child);
+				}
+				for (int refId : e.getRefChildrenList()) {
+					INodeReference ref = refList.get(refId);
+					addToParent(p, ref);
+				}
+			}
+		}
+		
+		void loadINodeUnderlyingDirectorySection(InputStream in) throws IOException {
+			final List<INodeReference> refList = parent.getLoaderContext().getRefList();
+			while (true) {
+				INodeUnderlyingDirectorySection.UnderlyingDirEntry e = INodeUnderlyingDirectorySection.UnderlyingDirEntry.parseDelimitedFrom(in);
+				// note that in is a LimitedInputStream
+				if (e == null) {
+					break;
+				}
+				
+				INodeUnderlyingDirectory p = (INodeUnderlyingDirectory) dir.getInode(e.getParent());
+				for (long id : e.getChildrenList()) {
+					INode child = dir.getInode(id);
+					addToParentUnderlying(p, child);
+					
+					
+					
+					
+					/*INodeDirectory m = (INodeDirectory) dir.getInode(e.getMaster());
+					m.addUnderlyingDirectory(e.getPartitioning(), dir.getInode());*/
+				}
+				
+				for (int refId : e.getRefChildrenList()) {
+					INodeReference ref = refList.get(refId);
+					addToParentUnderlying(p, ref);
+				}
+				
+				/*INodeDirectory m = (INodeDirectory) dir.getInode(e.getMaster());
+				m.addUnderlyingDirectory(e.getPartitioning(), dir.getInode(e.get));*/
+			}
+		}
 
-    private INodeFile loadINodeFile(INodeSection.INode n) {
-      assert n.getType() == INodeSection.INode.Type.FILE;
-      INodeSection.INodeFile f = n.getFile();
-      List<BlockProto> bp = f.getBlocksList();
-      short replication = (short) f.getReplication();
-      LoaderContext state = parent.getLoaderContext();
+		// serhiy
+		void loadINodeSection(InputStream in) throws IOException {
+			LOG.info("--- MPSR ---: loadINodeSection() : Loading INode section from fsimage.");
+			INodeSection s = INodeSection.parseDelimitedFrom(in);
+			fsn.resetLastInodeId(s.getLastInodeId());
+			LOG.info("Loading " + s.getNumInodes() + " INodes.");
+			for (int i = 0; i < s.getNumInodes(); ++i) {
+				INodeSection.INode p = INodeSection.INode.parseDelimitedFrom(in);
+				if (p.getId() == INodeId.ROOT_INODE_ID) {
+					loadRootINode(p);
+				} else {
+					INode n = loadINode(p);
+					dir.addToInodeMap(n);
+				}
+			}
 
-      BlockInfo[] blocks = new BlockInfo[bp.size()];
-      for (int i = 0, e = bp.size(); i < e; ++i) {
-        blocks[i] = new BlockInfo(PBHelper.convert(bp.get(i)), replication);
-      }
-      final PermissionStatus permissions = loadPermission(f.getPermission(),
-          parent.getLoaderContext().getStringTable());
+			for (Map.Entry<Long, Long> inodeMasterRelation: inodeMasterRelations.entrySet()) {
+				INodeUnderlyingDirectory underlyingDirectory = (INodeUnderlyingDirectory)dir.getInode(inodeMasterRelation.getKey());
+				INodeDirectory master = (INodeDirectory)dir.getInode(inodeMasterRelation.getValue());
+				underlyingDirectory.setMaster(master);
+				master.addUnderlyingDirectory(underlyingDirectory.getPartitioning(), underlyingDirectory);
+			}
+		}
 
-      final INodeFile file = new INodeFile(n.getId(),
-          n.getName().toByteArray(), permissions, f.getModificationTime(),
-          f.getAccessTime(), blocks, replication, f.getPreferredBlockSize(),
-          (byte)f.getStoragePolicyID());
+		/**
+		 * Load the under-construction files section, and update the lease map
+		 */
+		void loadFilesUnderConstructionSection(InputStream in) throws IOException {
+			// This section is consumed, but not actually used for restoring
+			// leases.
+			while (true) {
+				FileUnderConstructionEntry entry = FileUnderConstructionEntry.parseDelimitedFrom(in);
+				if (entry == null) {
+					break;
+				}
+			}
 
-      if (f.hasAcl()) {
-        file.addAclFeature(new AclFeature(loadAclEntries(f.getAcl(),
-            state.getStringTable())));
-      }
-      
-      if (f.hasXAttrs()) {
-        file.addXAttrFeature(new XAttrFeature(
-            loadXAttrs(f.getXAttrs(), state.getStringTable())));
-      }
+			// Add a lease for each and every file under construction.
+			for (INodeFile file : ucFiles) {
+				FileUnderConstructionFeature uc = file.getFileUnderConstructionFeature();
+				Preconditions.checkState(uc != null); // file must be
+														// under-construction
+				String path = file.getFullPathName();
+				// Skip the deleted files in snapshot. This leaks UC inodes that
+				// are
+				// deleted from the current view.
+				if (path.startsWith("/")) {
+					fsn.leaseManager.addLease(uc.getClientName(), path);
+				}
+			}
+		}
 
-      // under-construction information
-      if (f.hasFileUC()) {
-        ucFiles.add(file);
-        INodeSection.FileUnderConstructionFeature uc = f.getFileUC();
-        file.toUnderConstruction(uc.getClientName(), uc.getClientMachine());
-        if (blocks.length > 0) {
-          BlockInfo lastBlk = file.getLastBlock();
-          // replace the last block of file
-          file.setBlock(file.numBlocks() - 1, new BlockInfoUnderConstruction(
-              lastBlk, replication));
-        }
-      }
-      return file;
-    }
+		private void addToParent(INodeDirectory parent, INode child) {
+			if (parent == dir.rootDir && FSDirectory.isReservedName(child)) {
+				throw new HadoopIllegalArgumentException("File name \"" + child.getLocalName()
+						+ "\" is reserved. Please " + " change the name of the existing file or directory to another "
+						+ "name before upgrading to this release.");
+			}
+			// NOTE: This does not update space counts for parents
+			if (!parent.addChild(child)) {
+				return;
+			}
+			dir.cacheName(child);
 
+			if (child.isFile()) {
+				updateBlocksMap(child.asFile(), fsn.getBlockManager());
+			}
+		}
+		
+		private void addToParentUnderlying(INodeUnderlyingDirectory parent, INode child) {
+			if (parent == dir.rootDir.getUnderlyingDirectory(parent.getPartitioning()) && FSDirectory.isReservedName(child)) {
+				throw new HadoopIllegalArgumentException("File name \"" + child.getLocalName()
+						+ "\" is reserved. Please " + " change the name of the existing file or directory to another "
+						+ "name before upgrading to this release.");
+			}
+			// NOTE: This does not update space counts for parents
+			if (!parent.addChild(child)) {
+				return;
+			}
+			//dir.cacheName(child);
 
-    private INodeSymlink loadINodeSymlink(INodeSection.INode n) {
-      assert n.getType() == INodeSection.INode.Type.SYMLINK;
-      INodeSection.INodeSymlink s = n.getSymlink();
-      final PermissionStatus permissions = loadPermission(s.getPermission(),
-          parent.getLoaderContext().getStringTable());
-      INodeSymlink sym = new INodeSymlink(n.getId(), n.getName().toByteArray(),
-          permissions, s.getModificationTime(), s.getAccessTime(),
-          s.getTarget().toStringUtf8());
-      return sym;
-    }
+			if (child.isFile()) {
+				updateBlocksMap(child.asFile(), fsn.getBlockManager());
+			}
+		}
 
-    private void loadRootINode(INodeSection.INode p) {
-      INodeDirectory root = loadINodeDirectory(p, parent.getLoaderContext());
-      final Quota.Counts q = root.getQuotaCounts();
-      final long nsQuota = q.get(Quota.NAMESPACE);
-      final long dsQuota = q.get(Quota.DISKSPACE);
-      if (nsQuota != -1 || dsQuota != -1) {
-        dir.rootDir.getDirectoryWithQuotaFeature().setQuota(nsQuota, dsQuota);
-      }
-      dir.rootDir.cloneModificationTime(root);
-      dir.rootDir.clonePermissionStatus(root);
-      final AclFeature af = root.getFeature(AclFeature.class);
-      if (af != null) {
-        dir.rootDir.addAclFeature(af);
-      }
-      // root dir supports having extended attributes according to POSIX
-      final XAttrFeature f = root.getXAttrFeature();
-      if (f != null) {
-        dir.rootDir.addXAttrFeature(f);
-      }
-      dir.addRootDirToEncryptionZone(f);
-    }
-  }
+		private INode loadINode(INodeSection.INode n) {
+			switch (n.getType()) {
+			case FILE:
+				return loadINodeFile(n);
+			case UNDERLYING_DIRECTORY:
+				return loadINodeUnderlyingDirectory(n, parent.getLoaderContext());
+			case DIRECTORY:
+				return loadINodeDirectory(n, parent.getLoaderContext());
+			case SYMLINK:
+				return loadINodeSymlink(n);
+			default:
+				break;
+			}
+			return null;
+		}
 
-  public final static class Saver {
-    private static long buildPermissionStatus(INodeAttributes n,
-        final SaverContext.DeduplicationMap<String> stringMap) {
-      long userId = stringMap.getId(n.getUserName());
-      long groupId = stringMap.getId(n.getGroupName());
-      return ((userId & USER_GROUP_STRID_MASK) << USER_STRID_OFFSET)
-          | ((groupId & USER_GROUP_STRID_MASK) << GROUP_STRID_OFFSET)
-          | n.getFsPermissionShort();
-    }
+		private INodeFile loadINodeFile(INodeSection.INode n) {
+			assert n.getType() == INodeSection.INode.Type.FILE;
+			INodeSection.INodeFile f = n.getFile();
+			List<BlockProto> bp = f.getBlocksList();
+			short replication = (short) f.getReplication();
+			LoaderContext state = parent.getLoaderContext();
 
-    private static AclFeatureProto.Builder buildAclEntries(AclFeature f,
-        final SaverContext.DeduplicationMap<String> map) {
-      AclFeatureProto.Builder b = AclFeatureProto.newBuilder();
-      for (AclEntry e : f.getEntries()) {
-        int v = ((map.getId(e.getName()) & ACL_ENTRY_NAME_MASK) << ACL_ENTRY_NAME_OFFSET)
-            | (e.getType().ordinal() << ACL_ENTRY_TYPE_OFFSET)
-            | (e.getScope().ordinal() << ACL_ENTRY_SCOPE_OFFSET)
-            | (e.getPermission().ordinal());
-        b.addEntries(v);
-      }
-      return b;
-    }
-    
-    private static XAttrFeatureProto.Builder buildXAttrs(XAttrFeature f,
-        final SaverContext.DeduplicationMap<String> stringMap) {
-      XAttrFeatureProto.Builder b = XAttrFeatureProto.newBuilder();
-      for (XAttr a : f.getXAttrs()) {
-        XAttrCompactProto.Builder xAttrCompactBuilder = XAttrCompactProto.
-            newBuilder();
-        int nsOrd = a.getNameSpace().ordinal();
-        Preconditions.checkArgument(nsOrd < 8, "Too many namespaces.");
-        int v = ((nsOrd & XATTR_NAMESPACE_MASK) << XATTR_NAMESPACE_OFFSET)
-            | ((stringMap.getId(a.getName()) & XATTR_NAME_MASK) <<
-                XATTR_NAME_OFFSET);
-        v |= (((nsOrd >> 2) & XATTR_NAMESPACE_EXT_MASK) <<
-            XATTR_NAMESPACE_EXT_OFFSET);
-        xAttrCompactBuilder.setName(v);
-        if (a.getValue() != null) {
-          xAttrCompactBuilder.setValue(PBHelper.getByteString(a.getValue()));
-        }
-        b.addXAttrs(xAttrCompactBuilder.build());
-      }
-      
-      return b;
-    }
+			BlockInfo[] blocks = new BlockInfo[bp.size()];
+			for (int i = 0, e = bp.size(); i < e; ++i) {
+				blocks[i] = new BlockInfo(PBHelper.convert(bp.get(i)), replication);
+			}
+			final PermissionStatus permissions = loadPermission(f.getPermission(),
+					parent.getLoaderContext().getStringTable());
 
-    public static INodeSection.INodeFile.Builder buildINodeFile(
-        INodeFileAttributes file, final SaverContext state) {
-      INodeSection.INodeFile.Builder b = INodeSection.INodeFile.newBuilder()
-          .setAccessTime(file.getAccessTime())
-          .setModificationTime(file.getModificationTime())
-          .setPermission(buildPermissionStatus(file, state.getStringMap()))
-          .setPreferredBlockSize(file.getPreferredBlockSize())
-          .setReplication(file.getFileReplication())
-          .setStoragePolicyID(file.getLocalStoragePolicyID());
+			final INodeFile file = new INodeFile(n.getId(), n.getName().toByteArray(), permissions,
+					f.getModificationTime(), f.getAccessTime(), blocks, replication, f.getPreferredBlockSize(),
+					(byte) f.getStoragePolicyID());
 
-      AclFeature f = file.getAclFeature();
-      if (f != null) {
-        b.setAcl(buildAclEntries(f, state.getStringMap()));
-      }
-      XAttrFeature xAttrFeature = file.getXAttrFeature();
-      if (xAttrFeature != null) {
-        b.setXAttrs(buildXAttrs(xAttrFeature, state.getStringMap()));
-      }
-      return b;
-    }
+			if (f.hasAcl()) {
+				file.addAclFeature(new AclFeature(loadAclEntries(f.getAcl(), state.getStringTable())));
+			}
 
-    public static INodeSection.INodeDirectory.Builder buildINodeDirectory(
-        INodeDirectoryAttributes dir, final SaverContext state) {
-      Quota.Counts quota = dir.getQuotaCounts();
-      INodeSection.INodeDirectory.Builder b = INodeSection.INodeDirectory
-          .newBuilder().setModificationTime(dir.getModificationTime())
-          .setNsQuota(quota.get(Quota.NAMESPACE))
-          .setDsQuota(quota.get(Quota.DISKSPACE))
-          .setPermission(buildPermissionStatus(dir, state.getStringMap()));
+			if (f.hasXAttrs()) {
+				file.addXAttrFeature(new XAttrFeature(loadXAttrs(f.getXAttrs(), state.getStringTable())));
+			}
 
-      AclFeature f = dir.getAclFeature();
-      if (f != null) {
-        b.setAcl(buildAclEntries(f, state.getStringMap()));
-      }
-      XAttrFeature xAttrFeature = dir.getXAttrFeature();
-      if (xAttrFeature != null) {
-        b.setXAttrs(buildXAttrs(xAttrFeature, state.getStringMap()));
-      }
-      return b;
-    }
+			// under-construction information
+			if (f.hasFileUC()) {
+				ucFiles.add(file);
+				INodeSection.FileUnderConstructionFeature uc = f.getFileUC();
+				file.toUnderConstruction(uc.getClientName(), uc.getClientMachine());
+				if (blocks.length > 0) {
+					BlockInfo lastBlk = file.getLastBlock();
+					// replace the last block of file
+					file.setBlock(file.numBlocks() - 1, new BlockInfoUnderConstruction(lastBlk, replication));
+				}
+			}
+			return file;
+		}
 
-    private final FSNamesystem fsn;
-    private final FileSummary.Builder summary;
-    private final SaveNamespaceContext context;
-    private final FSImageFormatProtobuf.Saver parent;
+		private INodeSymlink loadINodeSymlink(INodeSection.INode n) {
+			assert n.getType() == INodeSection.INode.Type.SYMLINK;
+			INodeSection.INodeSymlink s = n.getSymlink();
+			final PermissionStatus permissions = loadPermission(s.getPermission(),
+					parent.getLoaderContext().getStringTable());
+			INodeSymlink sym = new INodeSymlink(n.getId(), n.getName().toByteArray(), permissions,
+					s.getModificationTime(), s.getAccessTime(), s.getTarget().toStringUtf8());
+			return sym;
+		}
 
-    Saver(FSImageFormatProtobuf.Saver parent, FileSummary.Builder summary) {
-      this.parent = parent;
-      this.summary = summary;
-      this.context = parent.getContext();
-      this.fsn = context.getSourceNamesystem();
-    }
+		private void loadRootINode(INodeSection.INode p) {
+			INodeDirectory root = loadINodeDirectory(p, parent.getLoaderContext());
+			final Quota.Counts q = root.getQuotaCounts();
+			final long nsQuota = q.get(Quota.NAMESPACE);
+			final long dsQuota = q.get(Quota.DISKSPACE);
+			if (nsQuota != -1 || dsQuota != -1) {
+				dir.rootDir.getDirectoryWithQuotaFeature().setQuota(nsQuota, dsQuota);
+			}
+			dir.rootDir.cloneModificationTime(root);
+			dir.rootDir.clonePermissionStatus(root);
+			final AclFeature af = root.getFeature(AclFeature.class);
+			if (af != null) {
+				dir.rootDir.addAclFeature(af);
+			}
+			// root dir supports having extended attributes according to POSIX
+			final XAttrFeature f = root.getXAttrFeature();
+			if (f != null) {
+				dir.rootDir.addXAttrFeature(f);
+			}
+			dir.addRootDirToEncryptionZone(f);
+		}
+	}
 
-    void serializeINodeDirectorySection(OutputStream out) throws IOException {
-      Iterator<INodeWithAdditionalFields> iter = fsn.getFSDirectory()
-          .getINodeMap().getMapIterator();
-      final ArrayList<INodeReference> refList = parent.getSaverContext()
-          .getRefList();
-      int i = 0;
-      while (iter.hasNext()) {
-        INodeWithAdditionalFields n = iter.next();
-        if (!n.isDirectory()) {
-          continue;
-        }
+	public final static class Saver {
+		private static long buildPermissionStatus(INodeAttributes n,
+				final SaverContext.DeduplicationMap<String> stringMap) {
+			long userId = stringMap.getId(n.getUserName());
+			long groupId = stringMap.getId(n.getGroupName());
+			return ((userId & USER_GROUP_STRID_MASK) << USER_STRID_OFFSET)
+					| ((groupId & USER_GROUP_STRID_MASK) << GROUP_STRID_OFFSET) | n.getFsPermissionShort();
+		}
 
-        ReadOnlyList<INode> children = n.asDirectory().getChildrenList(
-            Snapshot.CURRENT_STATE_ID);
-        if (children.size() > 0) {
-          INodeDirectorySection.DirEntry.Builder b = INodeDirectorySection.
-              DirEntry.newBuilder().setParent(n.getId());
-          for (INode inode : children) {
-            if (!inode.isReference()) {
-              b.addChildren(inode.getId());
-            } else {
-              refList.add(inode.asReference());
-              b.addRefChildren(refList.size() - 1);
-            }
-          }
-          INodeDirectorySection.DirEntry e = b.build();
-          e.writeDelimitedTo(out);
-        }
+		private static AclFeatureProto.Builder buildAclEntries(AclFeature f,
+				final SaverContext.DeduplicationMap<String> map) {
+			AclFeatureProto.Builder b = AclFeatureProto.newBuilder();
+			for (AclEntry e : f.getEntries()) {
+				int v = ((map.getId(e.getName()) & ACL_ENTRY_NAME_MASK) << ACL_ENTRY_NAME_OFFSET)
+						| (e.getType().ordinal() << ACL_ENTRY_TYPE_OFFSET)
+						| (e.getScope().ordinal() << ACL_ENTRY_SCOPE_OFFSET) | (e.getPermission().ordinal());
+				b.addEntries(v);
+			}
+			return b;
+		}
 
-        ++i;
-        if (i % FSImageFormatProtobuf.Saver.CHECK_CANCEL_INTERVAL == 0) {
-          context.checkCancelled();
-        }
-      }
-      parent.commitSection(summary,
-          FSImageFormatProtobuf.SectionName.INODE_DIR);
-    }
+		private static XAttrFeatureProto.Builder buildXAttrs(XAttrFeature f,
+				final SaverContext.DeduplicationMap<String> stringMap) {
+			XAttrFeatureProto.Builder b = XAttrFeatureProto.newBuilder();
+			for (XAttr a : f.getXAttrs()) {
+				XAttrCompactProto.Builder xAttrCompactBuilder = XAttrCompactProto.newBuilder();
+				int nsOrd = a.getNameSpace().ordinal();
+				Preconditions.checkArgument(nsOrd < 8, "Too many namespaces.");
+				int v = ((nsOrd & XATTR_NAMESPACE_MASK) << XATTR_NAMESPACE_OFFSET)
+						| ((stringMap.getId(a.getName()) & XATTR_NAME_MASK) << XATTR_NAME_OFFSET);
+				v |= (((nsOrd >> 2) & XATTR_NAMESPACE_EXT_MASK) << XATTR_NAMESPACE_EXT_OFFSET);
+				xAttrCompactBuilder.setName(v);
+				if (a.getValue() != null) {
+					xAttrCompactBuilder.setValue(PBHelper.getByteString(a.getValue()));
+				}
+				b.addXAttrs(xAttrCompactBuilder.build());
+			}
 
-    void serializeINodeSection(OutputStream out) throws IOException {
-      INodeMap inodesMap = fsn.dir.getINodeMap();
+			return b;
+		}
 
-      INodeSection.Builder b = INodeSection.newBuilder()
-          .setLastInodeId(fsn.getLastInodeId()).setNumInodes(inodesMap.size());
-      INodeSection s = b.build();
-      s.writeDelimitedTo(out);
+		public static INodeSection.INodeFile.Builder buildINodeFile(INodeFileAttributes file,
+				final SaverContext state) {
+			INodeSection.INodeFile.Builder b = INodeSection.INodeFile.newBuilder().setAccessTime(file.getAccessTime())
+					.setModificationTime(file.getModificationTime())
+					.setPermission(buildPermissionStatus(file, state.getStringMap()))
+					.setPreferredBlockSize(file.getPreferredBlockSize()).setReplication(file.getFileReplication())
+					.setStoragePolicyID(file.getLocalStoragePolicyID());
 
-      int i = 0;
-      Iterator<INodeWithAdditionalFields> iter = inodesMap.getMapIterator();
-      while (iter.hasNext()) {
-        INodeWithAdditionalFields n = iter.next();
-        save(out, n);
-        ++i;
-        if (i % FSImageFormatProtobuf.Saver.CHECK_CANCEL_INTERVAL == 0) {
-          context.checkCancelled();
-        }
-      }
-      parent.commitSection(summary, FSImageFormatProtobuf.SectionName.INODE);
-    }
+			AclFeature f = file.getAclFeature();
+			if (f != null) {
+				b.setAcl(buildAclEntries(f, state.getStringMap()));
+			}
+			XAttrFeature xAttrFeature = file.getXAttrFeature();
+			if (xAttrFeature != null) {
+				b.setXAttrs(buildXAttrs(xAttrFeature, state.getStringMap()));
+			}
+			return b;
+		}
 
-    void serializeFilesUCSection(OutputStream out) throws IOException {
-      Map<String, INodeFile> ucMap = fsn.getFilesUnderConstruction();
-      for (Map.Entry<String, INodeFile> entry : ucMap.entrySet()) {
-        String path = entry.getKey();
-        INodeFile file = entry.getValue();
-        FileUnderConstructionEntry.Builder b = FileUnderConstructionEntry
-            .newBuilder().setInodeId(file.getId()).setFullPath(path);
-        FileUnderConstructionEntry e = b.build();
-        e.writeDelimitedTo(out);
-      }
-      parent.commitSection(summary,
-          FSImageFormatProtobuf.SectionName.FILES_UNDERCONSTRUCTION);
-    }
+		public static INodeSection.INodeUnderlyingDirectory.Builder buildINodeUnderlyingDirectory(
+				INodeDirectoryAttributes dir, final SaverContext state) {
+			Quota.Counts quota = dir.getQuotaCounts();
+			INodeSection.INodeUnderlyingDirectory.Builder b = INodeSection.INodeUnderlyingDirectory.newBuilder()
+					.setModificationTime(dir.getModificationTime()).setNsQuota(quota.get(Quota.NAMESPACE))
+					.setDsQuota(quota.get(Quota.DISKSPACE))
+					.setPermission(buildPermissionStatus(dir, state.getStringMap()));
 
-    private void save(OutputStream out, INode n) throws IOException {
-      if (n.isDirectory()) {
-        save(out, n.asDirectory());
-      } else if (n.isFile()) {
-        save(out, n.asFile());
-      } else if (n.isSymlink()) {
-        save(out, n.asSymlink());
-      }
-    }
+			AclFeature f = dir.getAclFeature();
+			if (f != null) {
+				b.setAcl(buildAclEntries(f, state.getStringMap()));
+			}
+			XAttrFeature xAttrFeature = dir.getXAttrFeature();
+			if (xAttrFeature != null) {
+				b.setXAttrs(buildXAttrs(xAttrFeature, state.getStringMap()));
+			}
+			return b;
+		}
 
-    private void save(OutputStream out, INodeDirectory n) throws IOException {
-      INodeSection.INodeDirectory.Builder b = buildINodeDirectory(n,
-          parent.getSaverContext());
-      INodeSection.INode r = buildINodeCommon(n)
-          .setType(INodeSection.INode.Type.DIRECTORY).setDirectory(b).build();
-      r.writeDelimitedTo(out);
-    }
+		public static INodeSection.INodeDirectory.Builder buildINodeDirectory(INodeDirectoryAttributes dir,
+				final SaverContext state) {
+			Quota.Counts quota = dir.getQuotaCounts();
+			INodeSection.INodeDirectory.Builder b = INodeSection.INodeDirectory.newBuilder()
+					.setModificationTime(dir.getModificationTime()).setNsQuota(quota.get(Quota.NAMESPACE))
+					.setDsQuota(quota.get(Quota.DISKSPACE))
+					.setPermission(buildPermissionStatus(dir, state.getStringMap()));
 
-    private void save(OutputStream out, INodeFile n) throws IOException {
-      INodeSection.INodeFile.Builder b = buildINodeFile(n,
-          parent.getSaverContext());
+			AclFeature f = dir.getAclFeature();
+			if (f != null) {
+				b.setAcl(buildAclEntries(f, state.getStringMap()));
+			}
+			XAttrFeature xAttrFeature = dir.getXAttrFeature();
+			if (xAttrFeature != null) {
+				b.setXAttrs(buildXAttrs(xAttrFeature, state.getStringMap()));
+			}
+			return b;
+		}
 
-      if (n.getBlocks() != null) {
-        for (Block block : n.getBlocks()) {
-          b.addBlocks(PBHelper.convert(block));
-        }
-      }
+		private final FSNamesystem fsn;
+		private final FileSummary.Builder summary;
+		private final SaveNamespaceContext context;
+		private final FSImageFormatProtobuf.Saver parent;
 
-      FileUnderConstructionFeature uc = n.getFileUnderConstructionFeature();
-      if (uc != null) {
-        INodeSection.FileUnderConstructionFeature f =
-            INodeSection.FileUnderConstructionFeature
-            .newBuilder().setClientName(uc.getClientName())
-            .setClientMachine(uc.getClientMachine()).build();
-        b.setFileUC(f);
-      }
+		Saver(FSImageFormatProtobuf.Saver parent, FileSummary.Builder summary) {
+			this.parent = parent;
+			this.summary = summary;
+			this.context = parent.getContext();
+			this.fsn = context.getSourceNamesystem();
+		}
 
-      INodeSection.INode r = buildINodeCommon(n)
-          .setType(INodeSection.INode.Type.FILE).setFile(b).build();
-      r.writeDelimitedTo(out);
-    }
+		void serializeINodeDirectorySection(OutputStream out) throws IOException {
+			Iterator<INodeWithAdditionalFields> iter = fsn.getFSDirectory().getINodeMap().getMapIterator();
+			final ArrayList<INodeReference> refList = parent.getSaverContext().getRefList();
+			int i = 0;
+			while (iter.hasNext()) {
+				INodeWithAdditionalFields n = iter.next();
+				if (!n.isDirectory()) {
+					continue;
+				}
 
-    private void save(OutputStream out, INodeSymlink n) throws IOException {
-      SaverContext state = parent.getSaverContext();
-      INodeSection.INodeSymlink.Builder b = INodeSection.INodeSymlink
-          .newBuilder()
-          .setPermission(buildPermissionStatus(n, state.getStringMap()))
-          .setTarget(ByteString.copyFrom(n.getSymlink()))
-          .setModificationTime(n.getModificationTime())
-          .setAccessTime(n.getAccessTime());
+				ReadOnlyList<INode> children = n.asDirectory().getChildrenList(Snapshot.CURRENT_STATE_ID);
+				if (children.size() > 0) {
+					INodeDirectorySection.DirEntry.Builder b = INodeDirectorySection.DirEntry.newBuilder()
+							.setParent(n.getId());
+					for (INode inode : children) {
+						if (!inode.isReference()) {
+							b.addChildren(inode.getId());
+						} else {
+							refList.add(inode.asReference());
+							b.addRefChildren(refList.size() - 1);
+						}
+					}
+					INodeDirectorySection.DirEntry e = b.build();
+					e.writeDelimitedTo(out);
+				}
 
-      INodeSection.INode r = buildINodeCommon(n)
-          .setType(INodeSection.INode.Type.SYMLINK).setSymlink(b).build();
-      r.writeDelimitedTo(out);
-    }
+				++i;
+				if (i % FSImageFormatProtobuf.Saver.CHECK_CANCEL_INTERVAL == 0) {
+					context.checkCancelled();
+				}
+			}
+			parent.commitSection(summary, FSImageFormatProtobuf.SectionName.INODE_DIR);
+		}
 
-    private final INodeSection.INode.Builder buildINodeCommon(INode n) {
-      return INodeSection.INode.newBuilder()
-          .setId(n.getId())
-          .setName(ByteString.copyFrom(n.getLocalNameBytes()));
-    }
-  }
+		void serializeIUnderlyingNodeDirectorySection(OutputStream out) throws IOException {
+			Iterator<INodeWithAdditionalFields> iter = fsn.getFSDirectory().getINodeMap().getMapIterator();
+			final ArrayList<INodeReference> refList = parent.getSaverContext().getRefList();
+			int i = 0;
+			while (iter.hasNext()) {
+				INodeWithAdditionalFields n = iter.next();
 
-  private FSImageFormatPBINode() {
-  }
+				if (!n.isDirectory()) {
+					continue;
+				}
+
+				for (int j = 0; j < MPSRPartitioningProvider.NUM_PARTITIONS; j++) {
+					INodeUnderlyingDirectory iNodeUnderlyingDirectory = (INodeUnderlyingDirectory) n.asDirectory().getUnderlyingDirectory(j);
+					
+					if (iNodeUnderlyingDirectory != null) {
+						ReadOnlyList<INode> children = iNodeUnderlyingDirectory.getChildrenList();
+						if (children.size() > 0) {
+							INodeUnderlyingDirectorySection.UnderlyingDirEntry.Builder b = INodeUnderlyingDirectorySection.UnderlyingDirEntry
+									.newBuilder();
+
+							//if (iNodeUnderlyingDirectory.getUParent() != null) {
+								b.setParent(iNodeUnderlyingDirectory.getId());
+							//}
+
+							for (INode inode : children) {
+								if (!inode.isReference()) {
+									b.addChildren(inode.getId());
+								} else {
+									refList.add(inode.asReference());
+									b.addRefChildren(refList.size() - 1);
+								}
+							}
+							INodeUnderlyingDirectorySection.UnderlyingDirEntry e = b.build();
+							e.writeDelimitedTo(out);
+						}
+					}
+				}
+
+				++i;
+				if (i % FSImageFormatProtobuf.Saver.CHECK_CANCEL_INTERVAL == 0) {
+					context.checkCancelled();
+				}
+			}
+			parent.commitSection(summary, FSImageFormatProtobuf.SectionName.INODE_UNDERLYING_DIR);
+		}
+
+		void serializeINodeSection(OutputStream out) throws IOException {
+			INodeMap inodesMap = fsn.dir.getINodeMap();
+
+			INodeSection.Builder b = INodeSection.newBuilder().setLastInodeId(fsn.getLastInodeId())
+					.setNumInodes(inodesMap.size());
+			INodeSection s = b.build();
+			s.writeDelimitedTo(out);
+
+			int i = 0;
+			Iterator<INodeWithAdditionalFields> iter = inodesMap.getMapIterator();
+			while (iter.hasNext()) {
+				INodeWithAdditionalFields n = iter.next();
+				LOG.info("--- MPSR ---: serializeINodeSection (): Inode [id = " + n.getId() + ", name = " + n.getLocalName() + ", isUDir = " + n.isUnderlyingDirectory() + "].");
+				save(out, n);
+				++i;
+				if (i % FSImageFormatProtobuf.Saver.CHECK_CANCEL_INTERVAL == 0) {
+					context.checkCancelled();
+				}
+			}
+			parent.commitSection(summary, FSImageFormatProtobuf.SectionName.INODE);
+		}
+
+		void serializeFilesUCSection(OutputStream out) throws IOException {
+			Map<String, INodeFile> ucMap = fsn.getFilesUnderConstruction();
+			for (Map.Entry<String, INodeFile> entry : ucMap.entrySet()) {
+				String path = entry.getKey();
+				INodeFile file = entry.getValue();
+				FileUnderConstructionEntry.Builder b = FileUnderConstructionEntry.newBuilder().setInodeId(file.getId())
+						.setFullPath(path);
+				FileUnderConstructionEntry e = b.build();
+				e.writeDelimitedTo(out);
+			}
+			parent.commitSection(summary, FSImageFormatProtobuf.SectionName.FILES_UNDERCONSTRUCTION);
+		}
+
+		private void save(OutputStream out, INode n) throws IOException {
+			if (n.isDirectory()) {
+				save(out, n.asDirectory());
+			} else if (n.isFile()) {
+				save(out, n.asFile());
+			} else if (n.isSymlink()) {
+				save(out, n.asSymlink());
+			} else if (n.isUnderlyingDirectory()) {
+				save(out, (INodeUnderlyingDirectory) n);
+			}
+		}
+
+		private void save(OutputStream out, INodeUnderlyingDirectory n) throws IOException {
+			INodeSection.INodeUnderlyingDirectory.Builder b = buildINodeUnderlyingDirectory(n,
+					parent.getSaverContext()).setPartitioning(n.getPartitioning());
+			if (n.getMaster() != null) {
+				b.setMaster(n.getMaster().getId());
+			}
+			INodeSection.INode r = buildINodeCommon(n).setType(INodeSection.INode.Type.UNDERLYING_DIRECTORY)
+					.setUnderlyingDirectory(b).build();
+			r.writeDelimitedTo(out);
+		}
+
+		private void save(OutputStream out, INodeDirectory n) throws IOException {
+			INodeSection.INodeDirectory.Builder b = buildINodeDirectory(n, parent.getSaverContext());
+			INodeSection.INode r = buildINodeCommon(n).setType(INodeSection.INode.Type.DIRECTORY).setDirectory(b)
+					.build();
+			r.writeDelimitedTo(out);
+		}
+
+		private void save(OutputStream out, INodeFile n) throws IOException {
+			INodeSection.INodeFile.Builder b = buildINodeFile(n, parent.getSaverContext());
+
+			if (n.getBlocks() != null) {
+				for (Block block : n.getBlocks()) {
+					b.addBlocks(PBHelper.convert(block));
+				}
+			}
+
+			FileUnderConstructionFeature uc = n.getFileUnderConstructionFeature();
+			if (uc != null) {
+				INodeSection.FileUnderConstructionFeature f = INodeSection.FileUnderConstructionFeature.newBuilder()
+						.setClientName(uc.getClientName()).setClientMachine(uc.getClientMachine()).build();
+				b.setFileUC(f);
+			}
+
+			INodeSection.INode r = buildINodeCommon(n).setType(INodeSection.INode.Type.FILE).setFile(b).build();
+			r.writeDelimitedTo(out);
+		}
+
+		private void save(OutputStream out, INodeSymlink n) throws IOException {
+			SaverContext state = parent.getSaverContext();
+			INodeSection.INodeSymlink.Builder b = INodeSection.INodeSymlink.newBuilder()
+					.setPermission(buildPermissionStatus(n, state.getStringMap()))
+					.setTarget(ByteString.copyFrom(n.getSymlink())).setModificationTime(n.getModificationTime())
+					.setAccessTime(n.getAccessTime());
+
+			INodeSection.INode r = buildINodeCommon(n).setType(INodeSection.INode.Type.SYMLINK).setSymlink(b).build();
+			r.writeDelimitedTo(out);
+		}
+
+		private final INodeSection.INode.Builder buildINodeCommon(INode n) {
+			return INodeSection.INode.newBuilder().setId(n.getId()).setName(ByteString.copyFrom(n.getLocalNameBytes()));
+		}
+	}
+
+	private FSImageFormatPBINode() {
+	}
 }

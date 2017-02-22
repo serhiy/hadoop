@@ -10220,8 +10220,18 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 		if (inode instanceof INodeDirectory) {
 			for (int i = 0; i < MPSRPartitioningProvider.NUM_PARTITIONS; i++) {
 				if (((INodeDirectory)inode).getUnderlyingDirectory(i) != null) {
-					INode udir = ((INodeDirectory)inode).getUnderlyingDirectory(i);
-					LOG.info(spaces(level) + "[" + udir.getLocalName() + "(id = " + udir.getId() + ")]");
+					INodeUnderlyingDirectory udir = (INodeUnderlyingDirectory) ((INodeDirectory)inode).getUnderlyingDirectory(i);
+					if (udir == null) {
+						LOG.info(spaces(level) + "Udir is empty? makes sense?");
+					}
+					
+					long master = udir.getMaster()!=null?udir.getMaster().getId():0;
+					INode parent = udir.getUParent();
+					if (parent != null) {
+						LOG.info(spaces(level) + "[" + udir.getLocalName() + "(id = " + udir.getId() + ", parent=" + parent.getId() + ", master=" + master + ")]");
+					} else {
+						LOG.info(spaces(level) + "[" + udir.getLocalName() + "(id = " + udir.getId() + ", parent=null, master=" + master + ")]");
+					}
 				} else {
 					LOG.info(spaces(level) + "----------");
 				}

@@ -1059,7 +1059,7 @@ public class FSImage implements Closeable {
   public synchronized void saveNamespace(FSNamesystem source, NameNodeFile nnf,
       Canceler canceler) throws IOException {
     assert editLog != null : "editLog must be initialized";
-    LOG.info("Save namespace ...");
+    LOG.info("--- MPSR ---: saveNamespace() : Save namespace ...");
     storage.attemptRestoreRemovedStorage();
 
     boolean editLogWasOpen = editLog.isSegmentOpen();

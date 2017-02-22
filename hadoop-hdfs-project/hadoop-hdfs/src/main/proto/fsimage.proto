@@ -151,6 +151,19 @@ message INodeSection {
     optional AclFeatureProto acl = 5;
     optional XAttrFeatureProto xAttrs = 6;
   }
+  
+  message INodeUnderlyingDirectory {
+  	optional uint64 modificationTime = 1;
+    // namespace quota
+    optional uint64 nsQuota = 2;
+    // diskspace quota
+    optional uint64 dsQuota = 3;
+    optional fixed64 permission = 4;
+    optional AclFeatureProto acl = 5;
+    optional XAttrFeatureProto xAttrs = 6;
+    optional uint64 master = 7;
+    optional int32 partitioning = 8;
+  }
 
   message INodeSymlink {
     optional fixed64 permission = 1;
@@ -164,6 +177,7 @@ message INodeSection {
       FILE = 1;
       DIRECTORY = 2;
       SYMLINK = 3;
+      UNDERLYING_DIRECTORY = 4;
     };
     required Type type = 1;
     required uint64 id = 2;
@@ -172,6 +186,7 @@ message INodeSection {
     optional INodeFile file = 4;
     optional INodeDirectory directory = 5;
     optional INodeSymlink symlink = 6;
+    optional INodeUnderlyingDirectory underlyingDirectory = 7;
   }
 
   optional uint64 lastInodeId = 1;
@@ -209,6 +224,25 @@ message INodeDirectorySection {
     repeated uint32 refChildren = 3 [packed = true];
   }
   // repeated DirEntry, ended at the boundary of the section.
+}
+
+/**
+ * This section records the children of each directories
+ * NAME: INODE_UNDERLYING_DIR
+ */
+message INodeUnderlyingDirectorySection {
+  /**
+   * A single UnderlyingDirEntry needs to fit in the default PB max message size of
+   * 64MB. Please be careful when adding more fields to a UnderlyingDirEntry!
+   */
+  message UnderlyingDirEntry {
+    optional uint64 parent = 1;
+    // children that are not reference nodes
+    repeated uint64 children = 2 [packed = true];
+    // children that are reference nodes, each element is a reference node id
+    repeated uint32 refChildren = 3 [packed = true];
+  }
+  // repeated UnderlyingDirEntry, ended at the boundary of the section.
 }
 
 message INodeReferenceSection {

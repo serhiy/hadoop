@@ -27,6 +27,8 @@ public enum Content {
   FILE,
   /** The number of directories. */
   DIRECTORY,
+  /** The number of underlying directories. */
+  UNDERLYING_DIRECTORY,
   /** The number of symlinks. */
   SYMLINK,
 

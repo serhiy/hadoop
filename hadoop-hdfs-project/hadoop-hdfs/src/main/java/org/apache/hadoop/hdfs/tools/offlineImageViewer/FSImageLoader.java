@@ -161,6 +161,9 @@ class FSImageLoader {
           case INODE_DIR:
             dirmap = loadINodeDirectorySection(is, refIdList);
             break;
+          case INODE_UNDERLYING_DIR:
+              dirmap = loadINodeUnderlyingDirectorySection(is, refIdList);
+              break;
           default:
             break;
         }
@@ -199,6 +202,35 @@ class FSImageLoader {
     LOG.info("Loaded " + counter + " directories");
     return dirs;
   }
+  
+  private static Map<Long, long[]> loadINodeUnderlyingDirectorySection(InputStream in, List<Long> refIdList) throws IOException {
+	
+	LOG.info("--- MPSR ---: loadINodeUnderlyingDirectorySection() : Loading inode underlying directory section");
+	Map<Long, long[]> underlyingDirs = Maps.newHashMap();
+	long counter = 0;
+	while (true) {
+		FsImageProto.INodeUnderlyingDirectorySection.UnderlyingDirEntry e = FsImageProto.INodeUnderlyingDirectorySection.UnderlyingDirEntry.parseDelimitedFrom(in);
+		// note that in is a LimitedInputStream
+		if (e == null) {
+			break;
+		}
+		++counter;
+	
+		long[] l = new long[e.getChildrenCount() + e.getRefChildrenCount()];
+		for (int i = 0; i < e.getChildrenCount(); ++i) {
+			l[i] = e.getChildren(i);
+		}
+		for (int i = e.getChildrenCount(); i < l.length; i++) {
+			int refId = e.getRefChildren(i - e.getChildrenCount());
+			l[i] = refIdList.get(refId);
+		}
+		underlyingDirs.put(e.getParent(), l);
+		}
+		LOG.info("--- MPSR ---: loadINodeUnderlyingDirectorySection() : Loaded " + counter + " underlying directories");
+		return underlyingDirs;
+	}
+  
+  
 
   private static ImmutableList<Long> loadINodeReferenceSection(InputStream in)
       throws IOException {
@@ -351,6 +383,11 @@ class FSImageLoader {
         return FSImageFormatPBINode.Loader.loadAclEntries(
             d.getAcl(), stringTable);
       }
+      case UNDERLYING_DIRECTORY: {
+          FsImageProto.INodeSection.INodeUnderlyingDirectory d = inode.getUnderlyingDirectory();
+          return FSImageFormatPBINode.Loader.loadAclEntries(
+              d.getAcl(), stringTable);
+      }
       default: {
         return new ArrayList<AclEntry>();
       }
@@ -370,6 +407,11 @@ class FSImageLoader {
         FsImageProto.INodeSection.INodeDirectory d = inode.getDirectory();
         return FSImageFormatPBINode.Loader.loadPermission(
             d.getPermission(), stringTable);
+      }
+      case UNDERLYING_DIRECTORY: {
+          FsImageProto.INodeSection.INodeUnderlyingDirectory d = inode.getUnderlyingDirectory();
+          return FSImageFormatPBINode.Loader.loadPermission(
+              d.getPermission(), stringTable);
       }
       case SYMLINK: {
         FsImageProto.INodeSection.INodeSymlink s = inode.getSymlink();
@@ -467,6 +509,26 @@ class FSImageLoader {
             dirmap.get(inode.getId()).length : 0);
         return map;
       }
+      case UNDERLYING_DIRECTORY: {
+          FsImageProto.INodeSection.INodeUnderlyingDirectory d = inode.getUnderlyingDirectory();
+          PermissionStatus p = FSImageFormatPBINode.Loader.loadPermission(
+              d.getPermission(), stringTable);
+          map.put("accessTime", 0);
+          map.put("blockSize", 0);
+          map.put("group", p.getGroupName());
+          map.put("length", 0);
+          map.put("modificationTime", d.getModificationTime());
+          map.put("owner", p.getUserName());
+          map.put("pathSuffix",
+              printSuffix ? inode.getName().toStringUtf8() : "");
+          map.put("permission", toString(p.getPermission()));
+          map.put("replication", 0);
+          map.put("type", inode.getType());
+          map.put("fileId", inode.getId());
+          map.put("childrenNum", dirmap.containsKey(inode.getId()) ?
+              dirmap.get(inode.getId()).length : 0);
+          return map;
+        }
       case SYMLINK: {
         FsImageProto.INodeSection.INodeSymlink d = inode.getSymlink();
         PermissionStatus p = FSImageFormatPBINode.Loader.loadPermission(
