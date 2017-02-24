@@ -610,6 +610,17 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]> {
     return parent == null? null
         : parent.isReference()? getParentReference().getParent(): parent.asDirectory();
   }
+  
+  public final boolean isParentUDir() {
+	  return (parent instanceof INodeUnderlyingDirectory);
+  }
+  
+	public final INodeUnderlyingDirectory getUParent() {
+		if (parent!=null && !(parent instanceof INodeUnderlyingDirectory)) {
+			throw new IllegalStateException("--- MPSR ---: getUParent() : Parent is not an instance of INodeUnderlyingDirectory[parentId = " + parent.getId() + "]!");
+		}
+		return (INodeUnderlyingDirectory) parent;
+	}
 
   /**
    * @return the parent as a reference if this is a referred inode;

@@ -17,7 +17,9 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -30,6 +32,8 @@ import org.apache.hadoop.hdfs.server.namenode.snapshot.DirectoryWithSnapshotFeat
 import org.apache.hadoop.hdfs.server.namenode.snapshot.Snapshot;
 
 import com.google.common.base.Preconditions;
+
+import cern.mpe.hadoop.hdfs.server.namenode.MPSRPartitioningProvider;
 
 /**
  * Contains INodes information resolved from a given path.
@@ -247,10 +251,10 @@ public class INodesInPath {
           existing.snapshotRootIndex = existing.numNonNull;
         }
       } else {
-        // normal case, and also for resolving file/dir under snapshot root
-          LOG.info("--- MPSR ---: resolve() : Curr node = '" + curNode.getLocalName() + "'. Getting child [name = '" + DFSUtil.bytes2String(childName) + "'].");
-	        curNode = dir.getChild(childName, existing.getPathSnapshotId());
-	        LOG.info("--- MPSR ---: resolve() : ---- Child ['" + curNode + "'].");
+		// normal case, and also for resolving file/dir under snapshot root
+		LOG.trace("--- MPSR ---: resolve() : Curr node id = " + curNode.getId() + ", name = '" + curNode.getLocalName() + "'. Getting child [name = '" + DFSUtil.bytes2String(childName) + "'].");
+		curNode = dir.getChild(childName, existing.getPathSnapshotId());
+		LOG.trace("--- MPSR ---: resolve() : ---- Child ['" + curNode + "'].");
       }
       count++;
       index++;
@@ -326,7 +330,8 @@ public class INodesInPath {
     Preconditions.checkArgument(startingDir.compareTo(components[0]) == 0);
 
     INode curNode = startingDir.getUnderlyingDirectory(partitioningType);
-    final INodesInPath existing = new INodesInPath(components, numOfINodes);
+    List<INode> existingInodes = new ArrayList<INode>();
+    
     int count = 0;
     int index = 0;
     boolean changed = true;
@@ -338,7 +343,7 @@ public class INodesInPath {
     while (count < components.length && curNode != null) {
       final boolean lastComp = (count == components.length - 1);      
       if (index >= 0 && changed) {
-        existing.addNode(curNode);
+    	existingInodes.add(curNode);
         changed = false;
       }
       //final boolean isRef = curNode.isReference();
@@ -427,22 +432,29 @@ public class INodesInPath {
         curNode = dir.getChild(childName, existing.getPathSnapshotId());
       }*/
       
-      LOG.info("--- MPSR ---: resolveMpsr(): Current node [name = '" + dir.getLocalName() + "'].");
+      LOG.trace("--- MPSR ---: resolveMpsr(): Current node [name = '" + dir.getLocalName() + "'].");
       
-      INode child = dir.getChild(childName, existing.getPathSnapshotId());
+      INode child = dir.getChild(childName, Snapshot.CURRENT_STATE_ID);
       if (child != null) {
     	  curNode = child;
     	  changed = true;
-    	  LOG.info("--- MPSR ---: resolveMpsr(): Child found! [curNode = '" + curNode.getLocalName() + "', child = '" + DFSUtil.bytes2String(childName) + "']");
+    	  LOG.trace("--- MPSR ---: resolveMpsr(): Child found! [curNode = '" + curNode.getLocalName() + "', child = '" + DFSUtil.bytes2String(childName) + "']");
       } else {
-    	  LOG.info("--- MPSR ---: resolveMpsr(): Child NOT found! [curNode = '" + curNode.getLocalName() + "', child = '" + DFSUtil.bytes2String(childName) + "']");
+    	  LOG.trace("--- MPSR ---: resolveMpsr(): Child NOT found! [curNode = '" + curNode.getLocalName() + "', child = '" + DFSUtil.bytes2String(childName) + "']");
+    	  changed = false;
       }
       
       count++;
       index++;
     }
 
-    LOG.info("--- MPSR ---: resolveMpsr(): Path resolved. [path = '" + existing.toString(false) + "']");
+    final INodesInPath existing = new INodesInPath(components, existingInodes.size()+1);
+    for (INode inode: existingInodes) {
+    	existing.addNode(inode);
+    }
+    //existing.addNode(null);
+    
+    LOG.trace("--- MPSR ---: resolveMpsr(): Path resolved. [path = '" + existing.toString(false) + "']");
     
     return existing;
   }

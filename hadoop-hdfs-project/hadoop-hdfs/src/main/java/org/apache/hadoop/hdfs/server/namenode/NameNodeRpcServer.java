@@ -577,14 +577,9 @@ class NameNodeRpcServer implements NamenodeProtocols {
     
     HdfsFileStatus fileStatus;
     if (MPSRPartitioningProvider.isMpsr(src)) {
-	    /*List<String> underlyingDirs = MPSRPartitioningProvider.underlyingDirectories(src);
-	    for (String underlyingDir: underlyingDirs) {
-		    if (!checkPathLength(underlyingDir)) {
-		      throw new IOException("--- MPSR ---: create: Pathname too long.  Limit "
-		          + MAX_PATH_LENGTH + " characters, " + MAX_PATH_DEPTH + " levels.");
-		    }
-	    }*/
 	    
+    	LOG.info("--- MPSR ---: create() : Creating MPSR file.");
+    	
 	    namesystem.checkOperation(OperationCategory.WRITE);
 	    fileStatus = namesystem.startFileMpsr(src, new PermissionStatus(
 	        getRemoteUser().getShortUserName(), null, masked),
@@ -598,6 +593,8 @@ class NameNodeRpcServer implements NamenodeProtocols {
 		      throw new IOException("create: Pathname too long.  Limit "
 		          + MAX_PATH_LENGTH + " characters, " + MAX_PATH_DEPTH + " levels.");
 		    }
+    	
+    	LOG.info("--- MPSR ---: create() : Creating normal file.");
     	
         namesystem.checkOperation(OperationCategory.WRITE);
         fileStatus = namesystem.startFile(src, new PermissionStatus(
@@ -897,9 +894,16 @@ class NameNodeRpcServer implements NamenodeProtocols {
       throw new IOException("mkdirs: Pathname too long.  Limit " 
                             + MAX_PATH_LENGTH + " characters, " + MAX_PATH_DEPTH + " levels.");
     }
-    return namesystem.mkdirsMpsr(src,
-        new PermissionStatus(getRemoteUser().getShortUserName(),
-            null, masked), createParent);
+    
+    if (MPSRPartitioningProvider.isMpsr(src)) {
+	    return namesystem.mkdirsMpsr(src,
+	        new PermissionStatus(getRemoteUser().getShortUserName(),
+	            null, masked), createParent);
+    } else {
+	    return namesystem.mkdirs(src,
+		        new PermissionStatus(getRemoteUser().getShortUserName(),
+		            null, masked), createParent);
+    }
   }
 
   @Override // ClientProtocol

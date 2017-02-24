@@ -295,6 +295,7 @@ public final class FSImageFormatPBINode {
 				underlyingDirectory.setMaster(master);
 				master.addUnderlyingDirectory(underlyingDirectory.getPartitioning(), underlyingDirectory);
 			}
+			LOG.info("--- MPSR ---: loadINodeSection() : Finished loading INode section.");
 		}
 
 		/**
@@ -352,6 +353,8 @@ public final class FSImageFormatPBINode {
 			if (!parent.addChild(child)) {
 				return;
 			}
+			
+			child.setParent(parent);
 			//dir.cacheName(child);
 
 			if (child.isFile()) {

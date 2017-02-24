@@ -40,9 +40,9 @@ public class MPSRPartitioningProvider {
 	}
 	
 	public static boolean isMpsr(String directory) {
-		return true;
+		return directory.contains("=");
 	}
-	
+
 	public static String getTag(String directory) {
 		return directory.split("=")[0];
 	}

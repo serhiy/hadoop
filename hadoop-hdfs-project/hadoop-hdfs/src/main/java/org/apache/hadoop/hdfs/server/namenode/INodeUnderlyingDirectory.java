@@ -150,7 +150,7 @@ public class INodeUnderlyingDirectory extends INodeWithAdditionalFields implemen
 		addChild(node, low);
 		if (setModTime) {
 			// update modification time of the parent directory
-			updateModificationTime(node.getModificationTime(), latestSnapshotId);
+			//updateModificationTime(node.getModificationTime(), latestSnapshotId);
 		}
 		return true;
 	}
@@ -242,13 +242,6 @@ public class INodeUnderlyingDirectory extends INodeWithAdditionalFields implemen
       final int i = ReadOnlyList.Util.binarySearch(c, name);
       return i < 0 ? null : c.get(i);
     }
-	
-	public INodeUnderlyingDirectory getUParent() {
-		if (parent!=null && !(parent instanceof INodeUnderlyingDirectory)) {
-			throw new IllegalStateException("--- MPSR ---: getUParent() : Parent is not an instance of INodeUnderlyingDirectory[parentId = " + parent.getId() + "]!");
-		}
-		return (INodeUnderlyingDirectory) parent;
-	}
 
 	public int getPartitioning() {
 		return partitioning;

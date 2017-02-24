@@ -101,6 +101,8 @@ import org.apache.hadoop.hdfs.util.Holder;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 
+import cern.mpe.hadoop.hdfs.server.namenode.MPSRPartitioningProvider;
+
 @InterfaceAudience.Private
 @InterfaceStability.Evolving
 public class FSEditLogLoader {
@@ -336,6 +338,7 @@ public class FSEditLogLoader {
     
     switch (op.opCode) {
     case OP_ADD: {
+    	LOG.info("--- MPSR ---: applyEditLogOp() : Detected OP_ADD operation.");
       AddCloseOp addCloseOp = (AddCloseOp)op;
       final String path =
           renameReservedPathsOnUpgrade(addCloseOp.path, logVersion);
@@ -351,44 +354,74 @@ public class FSEditLogLoader {
       // 3. OP_ADD to open file for append
 
       // See if the file already exists (persistBlocks call)
-      final INodesInPath iip = fsDir.getINodesInPath(path, true);
-      final INode[] inodes = iip.getINodes();
-      INodeFile oldFile = INodeFile.valueOf(
-          inodes[inodes.length - 1], path, true);
+      final INodesInPath iip;
+      final INode[] inodes;
+      INodeFile oldFile;
+      
+      if (MPSRPartitioningProvider.isMpsr(path)) {
+		  iip = fsDir.getINodesInPathMpsr(path, true);
+		  inodes = iip.getINodes();
+		  oldFile = INodeFile.valueOf(inodes[inodes.length - 1], path, true);
+      } else {
+		  iip = fsDir.getINodesInPath(path, true);
+		  inodes = iip.getINodes();
+		  oldFile = INodeFile.valueOf(inodes[inodes.length - 1], path, true);
+      }
+      
       if (oldFile != null && addCloseOp.overwrite) {
         // This is OP_ADD with overwrite
         fsDir.unprotectedDelete(path, addCloseOp.mtime);
         oldFile = null;
       }
+      
       INodeFile newFile = oldFile;
       if (oldFile == null) { // this is OP_ADD on a new file (case 1)
-        // versions > 0 support per file replication
-        // get name and replication
-        final short replication = fsNamesys.getBlockManager()
-            .adjustReplication(addCloseOp.replication);
-        assert addCloseOp.blocks.length == 0;
+          // versions > 0 support per file replication
+          // get name and replication
+          final short replication = fsNamesys.getBlockManager()
+              .adjustReplication(addCloseOp.replication);
+          assert addCloseOp.blocks.length == 0;
 
-        // add to the file tree
-        inodeId = getAndUpdateLastInodeId(addCloseOp.inodeId, logVersion,
-            lastInodeId);
-        LOG.info("--- MPSR ---: applyEditLogOp : OP_ADD operation [inodeId = '" + inodeId + "'].");
-         
-        newFile = fsDir.unprotectedAddFile(inodeId,
-            path, addCloseOp.permissions, addCloseOp.aclEntries,
-            addCloseOp.xAttrs,
-            replication, addCloseOp.mtime, addCloseOp.atime,
-            addCloseOp.blockSize, true, addCloseOp.clientName,
-            addCloseOp.clientMachine, addCloseOp.storagePolicyId);
-        fsNamesys.leaseManager.addLease(addCloseOp.clientName, path);
-
-        // add the op into retry cache if necessary
-        if (toAddRetryCache) {
-          HdfsFileStatus stat = fsNamesys.dir.createFileStatus(
-              HdfsFileStatus.EMPTY_NAME, newFile,
-              BlockStoragePolicySuite.ID_UNSPECIFIED, Snapshot.CURRENT_STATE_ID,
-              false, iip);
-          fsNamesys.addCacheEntryWithPayload(addCloseOp.rpcClientId,
-              addCloseOp.rpcCallId, stat);
+          // add to the file tree
+          inodeId = getAndUpdateLastInodeId(addCloseOp.inodeId, logVersion,
+              lastInodeId);
+          
+        if (MPSRPartitioningProvider.isMpsr(path)) {
+        	String mpsrPath = fsNamesys.getMpsrPath(iip.getINode(iip.getNumNonNull() - 1));
+        	int partitioning = ((INodeUnderlyingDirectory)iip.getINode(0)).getPartitioning();
+        	
+        	LOG.info("--- MPSR ---: applyEditLogOp : OP_ADD operation [inodeId = '" + inodeId + "', path = " + mpsrPath + ", partitioning = " + partitioning + "].");
+        	
+        	newFile = fsDir.unprotectedAddFileMpsr(inodeId,
+    	            path, addCloseOp.permissions, addCloseOp.aclEntries,
+    	            addCloseOp.xAttrs,
+    	            replication, addCloseOp.mtime, addCloseOp.atime,
+    	            addCloseOp.blockSize, true, addCloseOp.clientName,
+    	            addCloseOp.clientMachine, addCloseOp.storagePolicyId, partitioning);
+        	
+        	//LOG.info("--- MPSR ---: applyEditLogOp : final mpsr path " + fsNamesys.getMpsrPath(newFile, true));
+        	
+        	fsNamesys.leaseManager.addLease(addCloseOp.clientName, fsNamesys.getMpsrPath(newFile, true));
+        	
+        } else {
+            LOG.info("--- MPSR ---: applyEditLogOp : OP_ADD operation [inodeId = '" + inodeId + "', path = " + path + "].");
+        	
+        	newFile = fsDir.unprotectedAddFile(inodeId,
+	            path, addCloseOp.permissions, addCloseOp.aclEntries,
+	            addCloseOp.xAttrs,
+	            replication, addCloseOp.mtime, addCloseOp.atime,
+	            addCloseOp.blockSize, true, addCloseOp.clientName,
+	            addCloseOp.clientMachine, addCloseOp.storagePolicyId);
+        	
+            fsNamesys.leaseManager.addLease(addCloseOp.clientName, path);
+            if (toAddRetryCache) {
+	            HdfsFileStatus stat = fsNamesys.dir.createFileStatus(
+	                    HdfsFileStatus.EMPTY_NAME, newFile,
+	                    BlockStoragePolicySuite.ID_UNSPECIFIED, Snapshot.CURRENT_STATE_ID,
+	                    false, iip);
+	                fsNamesys.addCacheEntryWithPayload(addCloseOp.rpcClientId,
+	                    addCloseOp.rpcCallId, stat);
+            }
         }
       } else { // This is OP_ADD on an existing file
         if (!oldFile.isUnderConstruction()) {
@@ -414,9 +447,9 @@ public class FSEditLogLoader {
       // update the block list.
       
       // Update the salient file attributes.
-      newFile.setAccessTime(addCloseOp.atime, Snapshot.CURRENT_STATE_ID);
+      /*newFile.setAccessTime(addCloseOp.atime, Snapshot.CURRENT_STATE_ID);
       newFile.setModificationTime(addCloseOp.mtime, Snapshot.CURRENT_STATE_ID);
-      updateBlocks(fsDir, addCloseOp, newFile);
+      updateBlocks(fsDir, addCloseOp, newFile);*/
       break;
     }
     case OP_CLOSE: {

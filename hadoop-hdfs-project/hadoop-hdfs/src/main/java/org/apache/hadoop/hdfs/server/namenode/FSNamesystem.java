@@ -2865,7 +2865,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 	          clientMachine, create, overwrite, createParent, replication, 
 	          blockSize, isLazyPersist);
 	      
-	      stat = dir.getFileInfo(src, false,
+	      stat = dir.getFileInfoMpsr(src, false,
 	          FSDirectory.isReservedRawName(srcArg), true);
 	      
 	    } catch (StandbyException se) {
@@ -3138,6 +3138,8 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     		  }
     	  }
       }
+      
+      printFS();
 
       if (newNodes == null) {
         throw new IOException("--- MPSR ---: Unable to add " + src +  " to namespace");
@@ -3145,8 +3147,9 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       
       for (INodeFile newNode: newNodes) {
     	  //TODO: possible problem here because of src
-    	  leaseManager.addLease(newNode.getFileUnderConstructionFeature().getClientName(), src);
-
+    	  String path = getMpsrPath(newNode, false);
+    	  leaseManager.addLease(newNode.getFileUnderConstructionFeature().getClientName(), path);
+    	  
 	      // Set encryption attributes if necessary
 	      /*if (feInfo != null) {
 	        dir.setFileEncryptionInfo(src, feInfo);
@@ -3157,8 +3160,9 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 	      //setNewINodeStoragePolicy(newNode, iip, isLazyPersist);
 	
 	      // record file record in log, record new generation stamp
-	      //getEditLog().logOpenFile(src, newNode, overwrite, logRetryEntry);
-	      NameNode.stateChangeLog.info("--- MPSR ---: DIR* NameSystem.startFile: added " + src + " inode " + newNode.getId() + " " + holder);
+    	  boolean logRetryEntry = false;
+	      getEditLog().logOpenFile(path+newNode.getLocalName(), newNode, overwrite, logRetryEntry);
+	      NameNode.stateChangeLog.info("--- MPSR ---: DIR* NameSystem.startFile: added " + path + " inode " + newNode.getId() + " " + holder);
     	}
       return toRemoveBlocks;
     } catch (IOException ie) {
@@ -3167,7 +3171,39 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     }
   }
   
+  public String getMpsrPath(INodeFile iNodeFile, boolean withFileName) {
+	  List<INode> inodesInPath = new ArrayList<INode>();
+	  if (withFileName) {
+		  inodesInPath.add(iNodeFile);
+	  }
+	  INode currNode = iNodeFile.getUParent();
+	  for (;currNode.getUParent()!=null;currNode=currNode.getUParent()) {
+		  inodesInPath.add(currNode);
+	  }
+	  StringBuilder sb = new StringBuilder("/");
+	  for (int i = inodesInPath.size()-1; i >= 0; i--) {
+		  sb.append(inodesInPath.get(i).getLocalName()).append("/");
+	  }
+	  if (withFileName) {
+		  String ret = sb.toString();
+		  return ret.substring(0, ret.lastIndexOf("/"));
+	  }
+	  
+	  return sb.toString();
+  }
   
+  public String getMpsrPath(INode inode) {
+	  INode currNode = inode.getUParent();
+	  List<INode> inodesInPath = new ArrayList<INode>();
+	  for (;currNode.getUParent()!=null;currNode=currNode.getUParent()) {
+		  inodesInPath.add(currNode);
+	  }
+	  StringBuilder sb = new StringBuilder("/");
+	  for (int i = inodesInPath.size()-1; i >= 0; i--) {
+		  sb.append(inodesInPath.get(i).getLocalName()).append("/");
+	  }
+	  return sb.toString();
+  }
   
   
   
@@ -3450,7 +3486,6 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 
   /**
    * Recover lease;
-   * Immediately revoke the lease of the current lease holder and start lease
    * recovery so that the file can be forced to be closed.
    * 
    * @param src the path of the file to start lease recovery
@@ -10231,6 +10266,12 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 						LOG.info(spaces(level) + "[" + udir.getLocalName() + "(id = " + udir.getId() + ", parent=" + parent.getId() + ", master=" + master + ")]");
 					} else {
 						LOG.info(spaces(level) + "[" + udir.getLocalName() + "(id = " + udir.getId() + ", parent=null, master=" + master + ")]");
+					}
+					
+					for (INode uchild: udir.getChildrenList()) {
+						if (uchild instanceof INodeFile) {
+							LOG.info(spaces(level) + " " + uchild.getLocalName() + " block = ");
+						}
 					}
 				} else {
 					LOG.info(spaces(level) + "----------");

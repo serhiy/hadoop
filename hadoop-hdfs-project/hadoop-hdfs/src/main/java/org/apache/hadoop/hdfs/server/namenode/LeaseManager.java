@@ -115,6 +115,7 @@ public class LeaseManager {
       for (String path : lease.getPaths()) {
         final INodeFile cons;
         try {
+        	LOG.info("--- MPSR ---: getNumUnderConstructionBlocks() : Lease path " + path);
           cons = this.fsnamesystem.getFSDirectory().getINode(path).asFile();
           if (!cons.isUnderConstruction()) {
             LOG.warn("The file " + cons.getFullPathName()
