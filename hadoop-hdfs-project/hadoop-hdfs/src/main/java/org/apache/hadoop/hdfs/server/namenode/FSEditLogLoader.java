@@ -359,9 +359,13 @@ public class FSEditLogLoader {
       INodeFile oldFile;
       
       if (MPSRPartitioningProvider.isMpsr(path)) {
+    	  LOG.info("---------------> path = " + path);
+    	  // TODO: here
 		  iip = fsDir.getINodesInPathMpsr(path, true);
+		  LOG.info("---------------> " + iip);
 		  inodes = iip.getINodes();
-		  oldFile = INodeFile.valueOf(inodes[inodes.length - 1], path, true);
+		  oldFile = INodeFile.valueOf(inodes[iip.getNumNonNull() - 1], path, true);
+		  LOG.info("-------------- > " + oldFile);
       } else {
 		  iip = fsDir.getINodesInPath(path, true);
 		  inodes = iip.getINodes();
@@ -378,6 +382,9 @@ public class FSEditLogLoader {
       if (oldFile == null) { // this is OP_ADD on a new file (case 1)
           // versions > 0 support per file replication
           // get name and replication
+    	  
+    	  LOG.info("--- MPSR ---: applyEditLogOp : Creating new file!");
+    	  
           final short replication = fsNamesys.getBlockManager()
               .adjustReplication(addCloseOp.replication);
           assert addCloseOp.blocks.length == 0;
@@ -387,10 +394,12 @@ public class FSEditLogLoader {
               lastInodeId);
           
         if (MPSRPartitioningProvider.isMpsr(path)) {
-        	String mpsrPath = fsNamesys.getMpsrPath(iip.getINode(iip.getNumNonNull() - 1));
+        	String mpsrPath = fsNamesys.getMpsrPath(iip.getINode(iip.getNumNonNull()-1));
         	int partitioning = ((INodeUnderlyingDirectory)iip.getINode(0)).getPartitioning();
         	
         	LOG.info("--- MPSR ---: applyEditLogOp : OP_ADD operation [inodeId = '" + inodeId + "', path = " + mpsrPath + ", partitioning = " + partitioning + "].");
+        	
+        	fsNamesys.printFS();
         	
         	newFile = fsDir.unprotectedAddFileMpsr(inodeId,
     	            path, addCloseOp.permissions, addCloseOp.aclEntries,
@@ -399,9 +408,11 @@ public class FSEditLogLoader {
     	            addCloseOp.blockSize, true, addCloseOp.clientName,
     	            addCloseOp.clientMachine, addCloseOp.storagePolicyId, partitioning);
         	
-        	//LOG.info("--- MPSR ---: applyEditLogOp : final mpsr path " + fsNamesys.getMpsrPath(newFile, true));
-        	
-        	fsNamesys.leaseManager.addLease(addCloseOp.clientName, fsNamesys.getMpsrPath(newFile, true));
+        	//if (newFile != null) {
+	        	LOG.info("--- MPSR ---: applyEditLogOp : final mpsr path " + fsNamesys.getMpsrPath(newFile, true));
+	        	
+	        	fsNamesys.leaseManager.addLease(addCloseOp.clientName, fsNamesys.getMpsrPath(newFile, true));
+        	//}
         	
         } else {
             LOG.info("--- MPSR ---: applyEditLogOp : OP_ADD operation [inodeId = '" + inodeId + "', path = " + path + "].");
@@ -424,6 +435,9 @@ public class FSEditLogLoader {
             }
         }
       } else { // This is OP_ADD on an existing file
+    	  
+    	  LOG.info("--- MPSR ---: applyEditLogOp : Appending new file!");
+    	  
         if (!oldFile.isUnderConstruction()) {
           // This is case 3: a call to append() on an already-closed file.
           if (FSNamesystem.LOG.isDebugEnabled()) {
@@ -447,12 +461,15 @@ public class FSEditLogLoader {
       // update the block list.
       
       // Update the salient file attributes.
-      /*newFile.setAccessTime(addCloseOp.atime, Snapshot.CURRENT_STATE_ID);
+      newFile.setAccessTime(addCloseOp.atime, Snapshot.CURRENT_STATE_ID);
       newFile.setModificationTime(addCloseOp.mtime, Snapshot.CURRENT_STATE_ID);
-      updateBlocks(fsDir, addCloseOp, newFile);*/
+      updateBlocks(fsDir, addCloseOp, newFile);
       break;
     }
     case OP_CLOSE: {
+    	
+    	LOG.info("--- MPSR ---: applyEditLogOp() : Detected OP_CLOSE operation.");
+    	
       AddCloseOp addCloseOp = (AddCloseOp)op;
       final String path =
           renameReservedPathsOnUpgrade(addCloseOp.path, logVersion);
@@ -463,8 +480,14 @@ public class FSEditLogLoader {
             " clientMachine " + addCloseOp.clientMachine);
       }
 
-      final INodesInPath iip = fsDir.getLastINodeInPath(path);
-      final INodeFile file = INodeFile.valueOf(iip.getINode(0), path);
+      INodeFile file;
+      if (MPSRPartitioningProvider.isMpsr(path)) {
+    	  INodesInPath iip = fsDir.getINodesInPath4WriteMpsr(path);
+    	  LOG.info("--- MPSR ---: applyEditLogOp() : Inodes = " + iip);
+    	  file = iip.getINode(iip.getNumNonNull() - 1).asFile();
+      } else {
+	      file = INodeFile.valueOf(fsDir.getLastINodeInPath(path).getINode(0), path);
+      }
 
       // Update the salient file attributes.
       file.setAccessTime(addCloseOp.atime, Snapshot.CURRENT_STATE_ID);

@@ -71,7 +71,7 @@ class CopyCommands {
         cf.parse(args);
 
         delimiter = cf.getOpt("nl") ? "\n" : null;
-
+        // -------> HERE
         dst = new PathData(new URI(args.removeLast()), getConf());
         if (dst.exists && dst.stat.isDirectory()) {
           throw new PathIsDirectoryException(dst.toString());

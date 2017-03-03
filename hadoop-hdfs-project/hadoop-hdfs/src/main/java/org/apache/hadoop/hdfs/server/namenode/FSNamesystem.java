@@ -2866,7 +2866,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 	          blockSize, isLazyPersist);
 	      
 	      stat = dir.getFileInfoMpsr(src, false,
-	          FSDirectory.isReservedRawName(srcArg), true);
+	          FSDirectory.isReservedRawName(srcArg), true, true);
 	      
 	    } catch (StandbyException se) {
 	      skipSync = true;
@@ -3147,7 +3147,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       
       for (INodeFile newNode: newNodes) {
     	  //TODO: possible problem here because of src
-    	  String path = getMpsrPath(newNode, false);
+    	  String path = getMpsrPath(newNode, true);
     	  leaseManager.addLease(newNode.getFileUnderConstructionFeature().getClientName(), path);
     	  
 	      // Set encryption attributes if necessary
@@ -3161,7 +3161,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 	
 	      // record file record in log, record new generation stamp
     	  boolean logRetryEntry = false;
-	      getEditLog().logOpenFile(path+newNode.getLocalName(), newNode, overwrite, logRetryEntry);
+	      getEditLog().logOpenFile(path, newNode, overwrite, logRetryEntry);
 	      NameNode.stateChangeLog.info("--- MPSR ---: DIR* NameSystem.startFile: added " + path + " inode " + newNode.getId() + " " + holder);
     	}
       return toRemoveBlocks;
@@ -3328,16 +3328,24 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   
   
   //serhiy
-  private LocatedBlock[] appendMpsrFileInternal(FSPermissionChecker pc, String src,
+  private LocatedBlock appendMpsrFileInternal(FSPermissionChecker pc, String src,
 	      String holder, String clientMachine, boolean logRetryCache)
 	      throws AccessControlException, UnresolvedLinkException,
 	      FileNotFoundException, IOException {
 	    
 	  	assert hasWriteLock();
 
+	  	LOG.info("--- MPSR ---: appendMpsrFileInternal() : path = " + src);
+	  	
 	    // Verify that the destination does not exist as a directory already.
-	    final INodesInPath iip = dir.getINodesInPath4Write(src);
-	    final INode inode = iip.getLastINode();
+	    final INodesInPath iip = dir.getINodesInPath4WriteMpsr(src);
+	    
+	    LOG.trace("--- MPSR ---: appendMpsrFileInternal() : inodes in path = " + iip);
+	    
+	    final INode inode = iip.getINode(iip.getNumNonNull()-1);
+	    
+	    LOG.info("--- MPSR ---: appendMpsrFileInternal() : last inode = " + inode);
+	    
 	    if (inode != null && inode.isDirectory()) {
 	      throw new FileAlreadyExistsException("Cannot append to directory " + src
 	          + "; already exists as a directory.");
@@ -3352,14 +3360,13 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 	          + src + " for client " + clientMachine);
 	      }
 	      INodeFile myFile = INodeFile.valueOf(inode, src, true);
-	      final BlockStoragePolicy lpPolicy =
+	      /*final BlockStoragePolicy lpPolicy =
 	          blockManager.getStoragePolicy("LAZY_PERSIST");
 
-	      if (lpPolicy != null &&
-	          lpPolicy.getId() == myFile.getStoragePolicyID()) {
+	      if (lpPolicy != null && lpPolicy.getId() == myFile.getStoragePolicyID()) {
 	        throw new UnsupportedOperationException(
 	            "Cannot append to lazy persist file " + src);
-	      }
+	      }*/
 	      // Opening an existing file for write - may need to recover lease.
 	      recoverLeaseInternal(myFile, src, holder, clientMachine, false);
 	      
@@ -3368,15 +3375,17 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 	      // the referenced file.  
 	      myFile = INodeFile.valueOf(dir.getINode(src), src, true);
 	      final BlockInfo lastBlock = myFile.getLastBlock();
+	      
+	      LOG.info("--- MPSR ---: appendMpsrFileInternal() : last block = " + lastBlock);
+	      
 	      // Check that the block has at least minimum replication.
 	      if(lastBlock != null && lastBlock.isComplete() &&
 	          !getBlockManager().isSufficientlyReplicated(lastBlock)) {
 	        throw new IOException("append: lastBlock=" + lastBlock +
 	            " of src=" + src + " is not sufficiently replicated yet.");
 	      }
-	      //TODO
-	      return null; //prepareFileForWrite(src, iip, holder, clientMachine, true,
-	          //logRetryCache);
+
+	      return prepareFileForWrite(src, iip, holder, clientMachine, true, logRetryCache);
 	    } catch (IOException ie) {
 	      NameNode.stateChangeLog.warn("DIR* NameSystem.append: " +ie.getMessage());
 	      throw ie;
@@ -3417,7 +3426,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   LocatedBlock prepareFileForWrite(String src, INodesInPath iip,
       String leaseHolder, String clientMachine, boolean writeToEditLog,
       boolean logRetryCache) throws IOException {
-    final INodeFile file = iip.getLastINode().asFile();
+    final INodeFile file = iip.getINode(iip.getNumNonNull()-1).asFile();
     final Quota.Counts delta = verifyQuotaForUCBlock(file, iip);
 
     file.recordModification(iip.getLatestSnapshotId());
@@ -3427,6 +3436,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
         file.getFileUnderConstructionFeature().getClientName(), src);
 
     LocatedBlock ret = blockManager.convertLastBlockToUnderConstruction(file);
+    LOG.info("--- MPSR --- : prepareFileForWrite() : Located block " + ret);
     if (ret != null && delta != null) {
       Preconditions.checkState(delta.get(Quota.DISKSPACE) >= 0,
           "appending to a block with size larger than the preferred block size");
@@ -3641,11 +3651,11 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   
   
   // serhiy
-  LocatedBlock[] appendMpsrFile(String src, String holder, String clientMachine)
+  LocatedBlock appendMpsrFile(String src, String holder, String clientMachine)
 	      throws AccessControlException, SafeModeException,
 	      FileAlreadyExistsException, FileNotFoundException,
 	      ParentNotDirectoryException, IOException {
-	    LocatedBlock [] lb = null;
+	    LocatedBlock lb = null;
 	    /*CacheEntryWithPayload cacheEntry = RetryCache.waitForCompletion(retryCache,
 	        null);
 	    if (cacheEntry != null && cacheEntry.isSuccess()) {
@@ -3658,7 +3668,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 	      success = true;
 	      return lb;
 	    } catch (AccessControlException e) {
-	      logAuditEvent(false, "appendMpsr", src);
+	      logAuditEvent(false, "append", src);
 	      throw e;
 	    } finally {
 	      //RetryCache.setState(cacheEntry, success, lb);
@@ -3735,15 +3745,16 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   
   
   //serhiy
-  private LocatedBlock[] appendMpsrFileInt(final String srcArg, String holder,
+  private LocatedBlock appendMpsrFileInt(final String srcArg, String holder,
 	      String clientMachine, boolean logRetryCache)
 	      throws AccessControlException, SafeModeException,
 	      FileAlreadyExistsException, FileNotFoundException,
 	      ParentNotDirectoryException, IOException {
+	  
 	    String src = srcArg;
 	    if (NameNode.stateChangeLog.isDebugEnabled()) {
 	      NameNode.stateChangeLog.debug("DIR* NameSystem.appendFile: src=" + src
-	          + ", holder=" + holder
+	          + ", holder=" + holder 
 	          + ", clientMachine=" + clientMachine);
 	    }
 	    boolean skipSync = false;
@@ -3753,7 +3764,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 	          DFS_SUPPORT_APPEND_KEY + " configuration option to enable it.");
 	    }
 
-	    LocatedBlock [] lb = null;
+	    LocatedBlock lb = null;
 	    FSPermissionChecker pc = getPermissionChecker();
 	    byte[][] pathComponents = FSDirectory.getPathComponentsForReservedPath(src);
 	    writeLock();
@@ -3774,14 +3785,14 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 	      }
 	    }
 	    if (lb != null) {
-	      if (NameNode.stateChangeLog.isDebugEnabled()) {
-	    	  for (LocatedBlock l: lb) {
+	      //if (NameNode.stateChangeLog.isDebugEnabled()) {
+	      //	  for (LocatedBlock l: lb) {
 	        NameNode.stateChangeLog.info("DIR* NameSystem.appendFile: file "
 	            +src+" for "+holder+" at "+clientMachine
-	            +" block " + l.getBlock()
-	            +" block size " + l.getBlock().getNumBytes());
-	    	  }
-	      }
+	            +" block " + lb.getBlock()
+	            +" block size " + lb.getBlock().getNumBytes());
+	    	 // }
+	      //}
 	    }
 	    logAuditEvent(true, "appendMpsr", srcArg);
 	    return lb;
@@ -3931,6 +3942,145 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     // Return located block
     return makeLocatedBlock(newBlock, targets, offset);
   }
+  
+  
+  
+  
+  /**
+   * The client would like to obtain an additional block for the indicated
+   * filename (which is being written-to).  Return an array that consists
+   * of the block, plus a set of machines.  The first on this list should
+   * be where the client writes data.  Subsequent items in the list must
+   * be provided in the connection to the first datanode.
+   *
+   * Make sure the previous blocks have been reported by datanodes and
+   * are replicated.  Will return an empty 2-elt array if we want the
+   * client to "try again later".
+   */
+  LocatedBlock getAdditionalBlockMpsr(String src, long fileId, String clientName,
+      ExtendedBlock previous, Set<Node> excludedNodes, 
+      List<String> favoredNodes)
+      throws LeaseExpiredException, NotReplicatedYetException,
+      QuotaExceededException, SafeModeException, UnresolvedLinkException,
+      IOException {
+    final long blockSize;
+    final int replication;
+    final byte storagePolicyID;
+    Node clientNode = null;
+    String clientMachine = null;
+
+    if(NameNode.stateChangeLog.isDebugEnabled()) {
+      NameNode.stateChangeLog.debug("BLOCK* NameSystem.getAdditionalBlock: "
+          + src + " inodeId " +  fileId  + " for " + clientName);
+    }
+
+    // Part I. Analyze the state of the file with respect to the input data.
+    checkOperation(OperationCategory.READ);
+    byte[][] pathComponents = FSDirectory.getPathComponentsForReservedPath(src);
+    readLock();
+    try {
+      checkOperation(OperationCategory.READ);
+      src = resolvePath(src, pathComponents);
+      
+      LOG.info("--- MPSR ---: getAdditionalBlockMpsr() : Resolved source " + src);
+      
+      LocatedBlock[] onRetryBlock = new LocatedBlock[1];
+      FileState fileState = analyzeFileState(src, fileId, clientName, previous, onRetryBlock);
+      final INodeFile pendingFile = fileState.inode;
+      
+      LOG.info("--- MPSR ---: getAdditionalBlockMpsr() : File state " + pendingFile.getLocalName() + " (id = " + pendingFile.getId() + ")");
+      
+      src = fileState.path;
+
+      if (onRetryBlock[0] != null && onRetryBlock[0].getLocations().length > 0) {
+        // This is a retry. Just return the last block if having locations.
+        return onRetryBlock[0];
+      }
+      if (pendingFile.getBlocks().length >= maxBlocksPerFile) {
+        throw new IOException("File has reached the limit on maximum number of"
+            + " blocks (" + DFSConfigKeys.DFS_NAMENODE_MAX_BLOCKS_PER_FILE_KEY
+            + "): " + pendingFile.getBlocks().length + " >= "
+            + maxBlocksPerFile);
+      }
+      blockSize = pendingFile.getPreferredBlockSize();
+      clientMachine = pendingFile.getFileUnderConstructionFeature()
+          .getClientMachine();
+      clientNode = blockManager.getDatanodeManager().getDatanodeByHost(
+          clientMachine);
+      replication = pendingFile.getFileReplication();
+      storagePolicyID = pendingFile.getStoragePolicyID();
+    } finally {
+      readUnlock();
+    }
+
+    if (clientNode == null) {
+      clientNode = getClientNode(clientMachine);
+    }
+
+    // choose targets for the new block to be allocated.
+    final DatanodeStorageInfo targets[] = getBlockManager().chooseTarget4NewBlock( 
+        src, replication, clientNode, excludedNodes, blockSize, favoredNodes,
+        storagePolicyID);
+
+    // Part II.
+    // Allocate a new block, add it to the INode and the BlocksMap. 
+    Block newBlock = null;
+    long offset;
+    checkOperation(OperationCategory.WRITE);
+    waitForLoadingFSImage();
+    writeLock();
+    try {
+      checkOperation(OperationCategory.WRITE);
+      // Run the full analysis again, since things could have changed
+      // while chooseTarget() was executing.
+      LocatedBlock[] onRetryBlock = new LocatedBlock[1];
+      FileState fileState = 
+          analyzeFileState(src, fileId, clientName, previous, onRetryBlock);
+      final INodeFile pendingFile = fileState.inode;
+      src = fileState.path;
+
+      if (onRetryBlock[0] != null) {
+        if (onRetryBlock[0].getLocations().length > 0) {
+          // This is a retry. Just return the last block if having locations.
+          return onRetryBlock[0];
+        } else {
+          // add new chosen targets to already allocated block and return
+          BlockInfo lastBlockInFile = pendingFile.getLastBlock();
+          ((BlockInfoUnderConstruction) lastBlockInFile)
+              .setExpectedLocations(targets);
+          LOG.info("--- MPSR ---: getAdditionalBlockMpsr() : Last block in file " + lastBlockInFile.getBlockId());
+          offset = pendingFile.computeFileSize();
+          return makeLocatedBlock(lastBlockInFile, targets, offset);
+        }
+      }
+
+      // commit the last block and complete it if it has minimum replicas
+      commitOrCompleteLastBlock(pendingFile,
+                                ExtendedBlock.getLocalBlock(previous));
+
+      // allocate new block, record block locations in INode.
+      newBlock = createNewBlock();
+      LOG.info("--- MPSR ---: getAdditionalBlockMpsr() : New block " + newBlock.getBlockId());
+      INodesInPath inodesInPath = INodesInPath.fromINode(pendingFile);
+      LOG.info("--- MPSR ---: getAdditionalBlockMpsr() : INodes in path " + inodesInPath);
+      saveAllocatedBlock(src, inodesInPath, newBlock, targets);
+
+      persistNewBlock(src, pendingFile);
+      offset = pendingFile.computeFileSize();
+    } finally {
+      writeUnlock();
+    }
+    getEditLog().logSync();
+
+    // Return located block
+    return makeLocatedBlock(newBlock, targets, offset);
+  }
+  
+  
+  
+  
+  
+  
 
   /*
    * Resolve clientmachine address to get a network location path
@@ -4226,6 +4376,10 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     }
     return file;
   }
+  
+  public void releaseLeases() {
+	  leaseManager.removeAllLeases();
+  }
  
   /**
    * Complete in-progress write to the given file.
@@ -4263,6 +4417,63 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     }
     return success;
   }
+
+  boolean completeFileMpsr(final String srcArg, String holder, ExtendedBlock last, long fileId)
+    throws SafeModeException, UnresolvedLinkException, IOException {
+    String src = srcArg;
+    if (NameNode.stateChangeLog.isDebugEnabled()) {
+      NameNode.stateChangeLog.debug("DIR* NameSystem.completeFile: " + src + " for " + holder);
+    }
+    checkBlock(last);
+    boolean success = false;
+    checkOperation(OperationCategory.WRITE);
+    
+    //byte[][] pathComponents = INode.getPathComponents(src);
+    boolean complete = (INode.getPathComponents(src).length - 2 ) == MPSRPartitioningProvider.tagsSize();
+    LOG.info("--- MPSR --- : completeFileMpsr() : Component size = " + INode.getPathComponents(src).length + ", tag size = " + MPSRPartitioningProvider.tagsSize());
+    INodesInPath[] iips = dir.getAllINodesInPath4WriteMpsr(src, false, complete);
+    
+    LOG.info("--- MPSR --- : completeFileMpsr() : Resolved inode paths = " + iips.length);
+    
+    waitForLoadingFSImage();
+    writeLock();
+    try {
+      checkOperation(OperationCategory.WRITE);
+      checkNameNodeSafeMode("Cannot complete file " + src);
+      //src = resolvePath(src, pathComponents);
+      for (INodesInPath iip: iips) {
+    	  LOG.info("--- MPSR --- : completeFileMpsr() : --> Completing " + iip);
+    	  src = getMpsrPath(iip.getINode(iip.getNumNonNull() - 1).asFile(), true);
+    	  LOG.info("--- MPSR --- : completeFileMpsr() : --> Completing " + src);
+    	  success = completeFileInternalMpsr(iip, src, holder, ExtendedBlock.getLocalBlock(last), fileId);
+      }
+    } finally {
+      writeUnlock();
+    }
+    getEditLog().logSync();
+    if (success) {
+      NameNode.stateChangeLog.info("DIR* completeFile: " + srcArg
+          + " is closed by " + holder);
+    }
+    return success;
+  }  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
 
   private boolean completeFileInternal(String src, 
       String holder, Block last, long fileId) throws SafeModeException,
@@ -4321,6 +4532,77 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
         Snapshot.CURRENT_STATE_ID);
     return true;
   }
+  
+  
+  
+  
+  
+  
+  
+  
+  private boolean completeFileInternalMpsr(INodesInPath iip, String src,
+	      String holder, Block last, long fileId) throws SafeModeException,
+	      UnresolvedLinkException, IOException {
+	    assert hasWriteLock();
+	    final INodeFile pendingFile;
+	    try {
+	      final INode inode;
+	      if (fileId == INodeId.GRANDFATHER_INODE_ID) {
+	        // Older clients may not have given us an inode ID to work with.
+	        // In this case, we have to try to resolve the path and hope it
+	        // hasn't changed or been deleted since the file was opened for write.
+	        //final INodesInPath iip = dir.getINodesInPathMpsr(src, false);
+	        inode = iip.getINode(iip.getNumNonNull() - 1);
+	      } else {
+	        inode = dir.getInode(fileId);
+	        if (inode != null) src = inode.getFullPathName();
+	      }
+	      pendingFile = checkLease(src, holder, inode, fileId);
+	    } catch (LeaseExpiredException lee) {
+	      final INode inode = dir.getINode(src);
+	      if (inode != null
+	          && inode.isFile()
+	          && !inode.asFile().isUnderConstruction()) {
+	        // This could be a retry RPC - i.e the client tried to close
+	        // the file, but missed the RPC response. Thus, it is trying
+	        // again to close the file. If the file still exists and
+	        // the client's view of the last block matches the actual
+	        // last block, then we'll treat it as a successful close.
+	        // See HDFS-3031.
+	        final Block realLastBlock = inode.asFile().getLastBlock();
+	        if (Block.matchingIdAndGenStamp(last, realLastBlock)) {
+	          NameNode.stateChangeLog.info("DIR* completeFile: " +
+	              "request from " + holder + " to complete inode " + fileId +
+	              "(" + src + ") which is already closed. But, it appears to be " +
+	              "an RPC retry. Returning success");
+	          return true;
+	        }
+	      }
+	      throw lee;
+	    }
+	    // Check the state of the penultimate block. It should be completed
+	    // before attempting to complete the last one.
+	    if (!checkFileProgress(pendingFile, false)) {
+	      return false;
+	    }
+
+	    // commit the last block and complete it if it has minimum replicas
+	    commitOrCompleteLastBlock(pendingFile, last);
+
+	    if (!checkFileProgress(pendingFile, true)) {
+	      return false;
+	    }
+
+	    finalizeINodeFileUnderConstruction(src, pendingFile,
+	        Snapshot.CURRENT_STATE_ID);
+	    return true;
+	  }
+  
+  
+  
+  
+  
+  
 
   /**
    * Save allocated block at the given pending filename
@@ -4818,8 +5100,13 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
             resolveLink);
         isSuperUser = pc.isSuperUser();
       }
-      stat = dir.getFileInfo(src, resolveLink,
-          FSDirectory.isReservedRawName(srcArg), isSuperUser);
+      if (MPSRPartitioningProvider.isMpsr(srcArg)) {
+    	  LOG.info("--- MPSR ---: getFileInfo() : Getting MPSR file info.");
+    	  stat = dir.getFileInfoMpsr(src, resolveLink, FSDirectory.isReservedRawName(srcArg), isSuperUser, false);
+      } else {
+    	  LOG.info("--- MPSR ---: getFileInfo() : Getting normal file info.");
+    	  stat = dir.getFileInfo(src, resolveLink, FSDirectory.isReservedRawName(srcArg), isSuperUser);
+      }
     } catch (AccessControlException e) {
       logAuditEvent(false, "getfileinfo", srcArg);
       throw e;
@@ -5522,8 +5809,9 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     if (diff > 0) {
       try {
         String path = fileINode.getFullPathName();
-        dir.updateSpaceConsumed(path, 0, -diff*fileINode.getFileReplication());
-      } catch (IOException e) {
+        LOG.info("--- MPSR ---: commitOrCompleteLastBlock() : INode path = " + path);
+        //dir.updateSpaceConsumed(path, 0, -diff*fileINode.getFileReplication());
+      } catch (Exception e) {
         LOG.warn("Unexpected exception while updating disk space.", e);
       }
     }
@@ -5546,6 +5834,8 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     // Create permanent INode, update blocks. No need to replace the inode here
     // since we just remove the uc feature from pendingFile
     final INodeFile newFile = pendingFile.toCompleteFile(now());
+    
+    LOG.info("--- MPSR ---: finalizeINodeFileUnderConstruction() : Removing lease from " + src);
 
     leaseManager.removeLease(uc.getClientName(), src);
 
@@ -7755,14 +8045,13 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     // look at the path hierarchy to see if one parent is deleted by recursive
     // deletion
     INode tmpChild = file;
-    INodeDirectory tmpParent = file.getParent();
+    INode tmpParent = file.isParentUDir()?file.getUParent():file.getParent();
     while (true) {
       if (tmpParent == null) {
         return true;
       }
 
-      INode childINode = tmpParent.getChild(tmpChild.getLocalNameBytes(),
-          Snapshot.CURRENT_STATE_ID);
+      INode childINode = tmpParent.isUnderlyingDirectory()? ((INodeUnderlyingDirectory)tmpParent).getChild(tmpChild.getLocalNameBytes(),Snapshot.CURRENT_STATE_ID): ((INodeDirectory)tmpParent).getChild(tmpChild.getLocalNameBytes(),Snapshot.CURRENT_STATE_ID);
       if (childINode == null || !childINode.equals(tmpChild)) {
         // a newly created INode with the same name as an already deleted one
         // would be a different INode than the deleted one
@@ -7774,7 +8063,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       }
 
       tmpChild = tmpParent;
-      tmpParent = tmpParent.getParent();
+      tmpParent = tmpParent.isParentUDir()? tmpParent.getUParent(): tmpParent.getParent();
     }
 
     if (file.isWithSnapshot() &&
@@ -10270,7 +10559,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 					
 					for (INode uchild: udir.getChildrenList()) {
 						if (uchild instanceof INodeFile) {
-							LOG.info(spaces(level) + " " + uchild.getLocalName() + " block = ");
+							LOG.info(spaces(level) + " " + uchild.getLocalName() + " block num = " + uchild.asFile().numBlocks());
 						}
 					}
 				} else {

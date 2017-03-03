@@ -295,6 +295,7 @@ public class DistributedFileSystem extends FileSystem {
       throws IOException {
     statistics.incrementReadOps(1);
     Path absF = fixRelativePart(f);
+    
     return new FileSystemLinkResolver<FSDataInputStream>() {
       @Override
       public FSDataInputStream doCall(final Path p)
@@ -320,6 +321,7 @@ public class DistributedFileSystem extends FileSystem {
       @Override
       public FSDataOutputStream doCall(final Path p)
           throws IOException, UnresolvedLinkException {
+    	  LOG.info("--- MPSR ---: append() : calling append.");
         return dfs.append(getPathName(p), bufferSize, progress, statistics);
       }
       @Override

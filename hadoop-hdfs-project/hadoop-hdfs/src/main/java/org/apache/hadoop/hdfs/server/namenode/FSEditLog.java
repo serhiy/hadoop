@@ -797,9 +797,11 @@ public class FSEditLog implements LogsPurgeable {
   public void logAddBlock(String path, INodeFile file) {
     Preconditions.checkArgument(file.isUnderConstruction());
     BlockInfo[] blocks = file.getBlocks();
+    LOG.info("--- MPSR ---: logAddBlock() : Number of blocks " + blocks.length);
     Preconditions.checkState(blocks != null && blocks.length > 0);
     BlockInfo pBlock = blocks.length > 1 ? blocks[blocks.length - 2] : null;
     BlockInfo lastBlock = blocks[blocks.length - 1];
+    LOG.info("--- MPSR ---: logAddBlock() : Last block " + lastBlock.getBlockId());
     AddBlockOp op = AddBlockOp.getInstance(cache.get()).setPath(path)
         .setPenultimateBlock(pBlock).setLastBlock(lastBlock);
     logEdit(op);

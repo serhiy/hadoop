@@ -194,6 +194,9 @@ public class LeaseManager {
    */
   synchronized void removeLease(String holder, String src) {
     Lease lease = getLease(holder);
+    
+    LOG.info("--- MPSR ---: removeLease() : Removing lease " + lease);
+    
     if (lease != null) {
       removeLease(lease, src);
     } else {

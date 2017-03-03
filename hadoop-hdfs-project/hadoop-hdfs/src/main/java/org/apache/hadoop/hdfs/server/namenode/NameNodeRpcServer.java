@@ -579,14 +579,17 @@ class NameNodeRpcServer implements NamenodeProtocols {
     if (MPSRPartitioningProvider.isMpsr(src)) {
 	    
     	LOG.info("--- MPSR ---: create() : Creating MPSR file.");
-    	
+    
 	    namesystem.checkOperation(OperationCategory.WRITE);
 	    fileStatus = namesystem.startFileMpsr(src, new PermissionStatus(
 	        getRemoteUser().getShortUserName(), null, masked),
 	        clientName, clientMachine, flag.get(), createParent, replication,
 	        blockSize, supportedVersions);
+	    
 	    metrics.incrFilesCreated();
 	    metrics.incrCreateFileOps();
+	    
+	    complete(src, clientName, null, INodeId.GRANDFATHER_INODE_ID);
 	    
     } else {
     	if (!checkPathLength(src)) {
@@ -619,8 +622,19 @@ class NameNodeRpcServer implements NamenodeProtocols {
           +src+" for "+clientName+" at "+clientMachine);
     }
     namesystem.checkOperation(OperationCategory.WRITE);
-    LocatedBlock info = namesystem.appendFile(src, clientName, clientMachine);
-    metrics.incrFilesAppended();
+    
+    LocatedBlock info = null;
+    if (MPSRPartitioningProvider.isMpsr(src)) {
+    	LOG.info("--- MPSR ---: append() : Appending to MPSR file.");
+    	info = namesystem.appendMpsrFile(src, clientName, clientMachine);
+    	for (int i = 0; i < MPSRPartitioningProvider.NUM_PARTITIONS; i++) {
+    		metrics.incrFilesAppended();
+    	}
+    } else {
+    	LOG.info("--- MPSR ---: append() : Appending to normal file.");
+    	info = namesystem.appendFile(src, clientName, clientMachine);
+    	metrics.incrFilesAppended();
+    }
     return info;
   }
   
@@ -629,15 +643,15 @@ class NameNodeRpcServer implements NamenodeProtocols {
   
   
   //serhiy
-  public LocatedBlock[] appendMpsr(String src, String clientName) throws IOException {
+  /*public LocatedBlock appendMpsr(String src, String clientName) throws IOException {
 	  checkNNStartup();
 	  String clientMachine = getClientMachine();
 	  stateChangeLog.info("--- MPSR ---: *DIR* NameNode.append: file " +src+" for "+clientName+" at "+clientMachine);
 	  namesystem.checkOperation(OperationCategory.WRITE);
-	  LocatedBlock [] info = namesystem.appendMpsrFile(src, clientName, clientMachine);
+	  LocatedBlock info = namesystem.appendMpsrFile(src, clientName, clientMachine);
 	  metrics.incrFilesAppended();
 	  return info;
-  }
+  }*/
   
   
   
@@ -690,6 +704,9 @@ class NameNodeRpcServer implements NamenodeProtocols {
       ExtendedBlock previous, DatanodeInfo[] excludedNodes, long fileId,
       String[] favoredNodes)
       throws IOException {
+	  
+	  LOG.info("--- MPSR --- : addBlock() : Adding block.");
+
     checkNNStartup();
     if (stateChangeLog.isDebugEnabled()) {
       stateChangeLog.debug("*BLOCK* NameNode.addBlock: file " + src
@@ -704,10 +721,18 @@ class NameNodeRpcServer implements NamenodeProtocols {
     }
     List<String> favoredNodesList = (favoredNodes == null) ? null
         : Arrays.asList(favoredNodes);
-    LocatedBlock locatedBlock = namesystem.getAdditionalBlock(src, fileId,
-        clientName, previous, excludedNodesSet, favoredNodesList);
-    if (locatedBlock != null)
+    
+    LocatedBlock locatedBlock;
+    if (MPSRPartitioningProvider.isMpsr(src)) {
+    	locatedBlock = namesystem.getAdditionalBlockMpsr(src, fileId, clientName, previous, excludedNodesSet, favoredNodesList);
+    } else {
+    	locatedBlock = namesystem.getAdditionalBlock(src, fileId, clientName, previous, excludedNodesSet, favoredNodesList);
+    }
+    
+    if (locatedBlock != null) {
       metrics.incrAddBlockOps();
+    }
+    
     return locatedBlock;
   }
 
@@ -766,7 +791,12 @@ class NameNodeRpcServer implements NamenodeProtocols {
       stateChangeLog.debug("*DIR* NameNode.complete: "
           + src + " fileId=" + fileId +" for " + clientName);
     }
-    return namesystem.completeFile(src, clientName, last, fileId);
+    
+    if (MPSRPartitioningProvider.isMpsr(src)) {
+    	return namesystem.completeFileMpsr(src, clientName, last, fileId);
+    } else {
+    	return namesystem.completeFile(src, clientName, last, fileId);
+    }
   }
 
   /**

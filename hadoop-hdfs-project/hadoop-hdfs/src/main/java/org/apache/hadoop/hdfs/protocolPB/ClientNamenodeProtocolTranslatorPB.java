@@ -1489,10 +1489,4 @@ public class ClientNamenodeProtocolTranslatorPB implements
       throw ProtobufHelper.getRemoteException(e);
     }
   }
-
-@Override
-public LocatedBlock[] appendMpsr(String src, String clientName) throws IOException {
-	// TODO Auto-generated method stub
-	return null;
-}
 }

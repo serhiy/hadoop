@@ -22,6 +22,7 @@ import static org.apache.hadoop.util.ExitUtil.terminate;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -905,11 +906,13 @@ public class BlockManager {
   /** Generate a block token for the located block. */
   public void setBlockToken(final LocatedBlock b,
       final BlockTokenSecretManager.AccessMode mode) throws IOException {
+  	LOG.info("--- MPSR --- : setBlockToken() : Setting block token.");
     if (isBlockTokenEnabled()) {
       // Use cached UGI if serving RPC calls.
       b.setBlockToken(blockTokenSecretManager.generateToken(
           NameNode.getRemoteUser().getShortUserName(),
           b.getBlock(), EnumSet.of(mode)));
+  		LOG.info("--- MPSR --- : setBlockToken() : Block token identifier = " + Arrays.toString(b.getBlockToken().getIdentifier()));
     }    
   }
 

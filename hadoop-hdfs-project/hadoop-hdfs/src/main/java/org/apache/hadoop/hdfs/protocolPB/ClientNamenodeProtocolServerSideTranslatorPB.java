@@ -20,6 +20,8 @@ package org.apache.hadoop.hdfs.protocolPB;
 import java.io.IOException;
 import java.util.List;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.BatchedRemoteIterator.BatchedEntries;
@@ -205,6 +207,7 @@ import org.apache.hadoop.hdfs.protocol.proto.XAttrProtos.SetXAttrRequestProto;
 import org.apache.hadoop.hdfs.protocol.proto.XAttrProtos.SetXAttrResponseProto;
 import org.apache.hadoop.hdfs.security.token.block.DataEncryptionKey;
 import org.apache.hadoop.hdfs.security.token.delegation.DelegationTokenIdentifier;
+import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
 import org.apache.hadoop.hdfs.server.namenode.INodeId;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.security.proto.SecurityProtos.CancelDelegationTokenRequestProto;
@@ -229,6 +232,9 @@ import com.google.protobuf.ServiceException;
 @InterfaceStability.Stable
 public class ClientNamenodeProtocolServerSideTranslatorPB implements
     ClientNamenodeProtocolPB {
+	
+	public static final Log LOG = LogFactory.getLog(ClientNamenodeProtocolServerSideTranslatorPB.class);
+	
   final private ClientProtocol server;
   static final DeleteSnapshotResponseProto VOID_DELETE_SNAPSHOT_RESPONSE =
       DeleteSnapshotResponseProto.newBuilder().build();
@@ -487,8 +493,10 @@ public class ClientNamenodeProtocolServerSideTranslatorPB implements
               .toArray(new DatanodeInfoProto[excl.size()])), req.getFileId(),
           (favor == null || favor.size() == 0) ? null : favor
               .toArray(new String[favor.size()]));
-      return AddBlockResponseProto.newBuilder()
-          .setBlock(PBHelper.convert(result)).build();
+      
+      LOG.info("--- MPSR ---: addBlock() : Added block id " + result.getBlock().getBlockId());
+      
+      return AddBlockResponseProto.newBuilder().setBlock(PBHelper.convert(result)).build();
     } catch (IOException e) {
       throw new ServiceException(e);
     }

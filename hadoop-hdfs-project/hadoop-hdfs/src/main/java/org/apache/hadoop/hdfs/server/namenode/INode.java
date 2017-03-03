@@ -591,7 +591,7 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]> {
     if (parentRef != null) {
       return "parentRef=" + parentRef.getLocalName() + "->";
     } else {
-      final INodeDirectory parentDir = getParent();
+      final INode parentDir = isParentUDir() ? getUParent() : getParent();
       if (parentDir != null) {
         return "parentDir=" + parentDir.getLocalName() + "/";
       } else {
@@ -730,6 +730,11 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]> {
     checkAbsolutePath(path);
     return DFSUtil.getPathComponents(path);
   }
+  
+  public static byte[][] getPathComponentsMpsr(String path) {
+	    checkAbsolutePath(path);
+	    return DFSUtil.getPathComponents(path);
+	  }
 
   /**
    * Splits an absolute {@code path} into an array of path components.

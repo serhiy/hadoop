@@ -224,6 +224,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.net.InetAddresses;
 
+import cern.mpe.hadoop.hdfs.server.namenode.MPSRPartitioningProvider;
+
 /********************************************************
  * DFSClient can connect to a Hadoop Filesystem and 
  * perform basic file tasks.  It uses the ClientProtocol
@@ -1654,11 +1656,14 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
                          + favoredNodes[i].getPort();
       }
     }
+
     final DFSOutputStream result = DFSOutputStream.newStreamForCreate(this,
         src, masked, flag, createParent, replication, blockSize, progress,
         buffersize, dfsClientConf.createChecksum(checksumOpt),
         favoredNodeStrs);
+    
     beginFileLease(result.getFileId(), result);
+    
     return result;
   }
   
@@ -1669,6 +1674,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
       int buffersize, Progressable progress) throws IOException {
     if (flag.contains(CreateFlag.APPEND)) {
       HdfsFileStatus stat = getFileInfo(src);
+
       if (stat == null) { // No file to append to
         // New file needs to be created if create option is present
         if (!flag.contains(CreateFlag.CREATE)) {
@@ -1705,8 +1711,9 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
       result = DFSOutputStream.newStreamForCreate(this, src, absPermission,
           flag, createParent, replication, blockSize, progress, buffersize,
           checksum, null);
+      
+      beginFileLease(result.getFileId(), result);
     }
-    beginFileLease(result.getFileId(), result);
     return result;
   }
   
@@ -1753,7 +1760,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
       int buffersize, Progressable progress) throws IOException {
     LocatedBlock lastBlock = null;
     try {
-      lastBlock = namenode.append(src, clientName);
+    	lastBlock = namenode.append(src, clientName);
     } catch(RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
                                      FileNotFoundException.class,

@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hdfs.protocol;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -88,16 +89,16 @@ public class LocatedBlock {
   public LocatedBlock(ExtendedBlock b, DatanodeInfo[] locs, String[] storageIDs,
                       StorageType[] storageTypes, long startOffset,
                       boolean corrupt, DatanodeInfo[] cachedLocs) {
-    this.b = b;
-    this.offset = startOffset;
-    this.corrupt = corrupt;
+    this.b =  b ;
+    this.offset = startOffset ;
+    this.corrupt = corrupt ;
     if (locs==null) {
-      this.locs = EMPTY_LOCS;
+      this.locs =  EMPTY_LOCS;
     } else {
       this.locs = locs;
     }
     this.storageIDs = storageIDs;
-    this.storageTypes = storageTypes;
+    this.storageTypes =  storageTypes ;
 
     if (cachedLocs == null || cachedLocs.length == 0) {
       this.cachedLocs = EMPTY_LOCS;
@@ -110,7 +111,7 @@ public class LocatedBlock {
     return blockToken;
   }
 
-  public void setBlockToken(Token<BlockTokenIdentifier> token) {
+  public void setBlockToken(Token<BlockTokenIdentifier> token) {;
     this.blockToken = token;
   }
 

@@ -74,4 +74,8 @@ public class MPSRPartitioningProvider {
 		
 		return sb.toString();
 	}
+	
+	public static int tagsSize() {
+		return tagOrder.size();
+	}
 }

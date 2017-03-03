@@ -231,7 +231,7 @@ public interface ClientProtocol {
   
   
   //serhiy
-  public LocatedBlock[] appendMpsr(String src, String clientName) throws IOException;
+  //public LocatedBlock appendMpsr(String src, String clientName) throws IOException;
   
 
   /**

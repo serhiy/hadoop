@@ -105,6 +105,8 @@ import com.google.common.cache.LoadingCache;
 import com.google.common.cache.RemovalListener;
 import com.google.common.cache.RemovalNotification;
 
+import cern.mpe.hadoop.hdfs.server.namenode.MPSRPartitioningProvider;
+
 
 /****************************************************************
  * DFSOutputStream creates files from a stream of bytes.
@@ -420,6 +422,13 @@ public class DFSOutputStream extends FSOutputSummer
       traceSpan = span;
     }
     
+    private DataStreamer(HdfsFileStatus stat, Span span, int partitioning) {
+        isAppend = false;
+        isLazyPersistFile = isLazyPersist(stat, partitioning);
+        stage = BlockConstructionStage.PIPELINE_SETUP_CREATE;
+        traceSpan = span;
+      }
+    
     /**
      * Construct a data streamer for append
      * @param lastBlock last block of the file to be appended
@@ -429,6 +438,65 @@ public class DFSOutputStream extends FSOutputSummer
      */
     private DataStreamer(LocatedBlock lastBlock, HdfsFileStatus stat,
         int bytesPerChecksum, Span span) throws IOException {
+      isAppend = true;
+      stage = BlockConstructionStage.PIPELINE_SETUP_APPEND;
+      traceSpan = span;
+      block = lastBlock.getBlock();
+      bytesSent = block.getNumBytes();
+      accessToken = lastBlock.getBlockToken();
+      isLazyPersistFile = isLazyPersist(stat);
+      long usedInLastBlock = stat.getLen() % blockSize;
+      int freeInLastBlock = (int)(blockSize - usedInLastBlock);
+
+      // calculate the amount of free space in the pre-existing 
+      // last crc chunk
+      int usedInCksum = (int)(stat.getLen() % bytesPerChecksum);
+      int freeInCksum = bytesPerChecksum - usedInCksum;
+
+      // if there is space in the last block, then we have to 
+      // append to that block
+      if (freeInLastBlock == blockSize) {
+        throw new IOException("The last block for file " + 
+            src + " is full.");
+      }
+
+      if (usedInCksum > 0 && freeInCksum > 0) {
+        // if there is space in the last partial chunk, then 
+        // setup in such a way that the next packet will have only 
+        // one chunk that fills up the partial chunk.
+        //
+        computePacketChunkSize(0, freeInCksum);
+        setChecksumBufSize(freeInCksum);
+        appendChunk = true;
+      } else {
+        // if the remaining space in the block is smaller than 
+        // that expected size of of a packet, then create 
+        // smaller size packet.
+        //
+        computePacketChunkSize(Math.min(dfsClient.getConf().writePacketSize, freeInLastBlock), 
+            bytesPerChecksum);
+      }
+
+      // setup pipeline to append to the last block XXX retries??
+      setPipeline(lastBlock);
+      errorIndex = -1;   // no errors yet.
+      if (nodes.length < 1) {
+        throw new IOException("Unable to retrieve blocks locations " +
+            " for last block " + block +
+            "of file " + src);
+
+      }
+    }
+    
+    /**
+     * Construct a data streamer for append
+     * @param lastBlock last block of the file to be appended
+     * @param stat status of the file to be appended
+     * @param bytesPerChecksum number of bytes per checksum
+     * @throws IOException if error occurs
+     */
+    private DataStreamer(LocatedBlock lastBlock, HdfsFileStatus stat,
+        int bytesPerChecksum, Span span, int partitioning) throws IOException {
       isAppend = true;
       stage = BlockConstructionStage.PIPELINE_SETUP_APPEND;
       traceSpan = span;
@@ -1525,8 +1593,7 @@ public class DFSOutputStream extends FSOutputSummer
         long localstart = Time.now();
         while (true) {
           try {
-            return dfsClient.namenode.addBlock(src, dfsClient.clientName,
-                block, excludedNodes, fileId, favoredNodes);
+            return dfsClient.namenode.addBlock(src, dfsClient.clientName, block, excludedNodes, fileId, favoredNodes);
           } catch (RemoteException e) {
             IOException ue = 
               e.unwrapRemoteException(FileNotFoundException.class,
@@ -1685,6 +1752,41 @@ public class DFSOutputStream extends FSOutputSummer
       dfsClient.getConf().dfsclientSlowIoWarningThresholdMs;
     this.byteArrayManager = dfsClient.getClientContext().getByteArrayManager();
   }
+  
+  
+  private DFSOutputStream(DFSClient dfsClient, String src, Progressable progress,
+	      HdfsFileStatus stat, DataChecksum checksum, int partitioning) throws IOException {
+	    super(getChecksum4Compute(checksum, stat));
+	    this.dfsClient = dfsClient;
+	    this.src = src;
+	    this.fileId = stat.getFileId(partitioning);
+	    this.blockSize = stat.getBlockSize(partitioning);
+	    this.blockReplication = stat.getReplication(partitioning);
+	    this.fileEncryptionInfo = stat.getFileEncryptionInfo(partitioning);
+	    this.progress = progress;
+	    this.cachingStrategy = new AtomicReference<CachingStrategy>(
+	        dfsClient.getDefaultWriteCachingStrategy());
+	    if ((progress != null) && DFSClient.LOG.isDebugEnabled()) {
+	      DFSClient.LOG.debug(
+	          "Set non-null progress callback on DFSOutputStream " + src);
+	    }
+	    
+	    this.bytesPerChecksum = checksum.getBytesPerChecksum();
+	    if (bytesPerChecksum <= 0) {
+	      throw new HadoopIllegalArgumentException(
+	          "Invalid value: bytesPerChecksum = " + bytesPerChecksum + " <= 0");
+	    }
+	    if (blockSize % bytesPerChecksum != 0) {
+	      throw new HadoopIllegalArgumentException("Invalid values: "
+	          + DFSConfigKeys.DFS_BYTES_PER_CHECKSUM_KEY + " (=" + bytesPerChecksum
+	          + ") must divide block size (=" + blockSize + ").");
+	    }
+	    this.checksum4WriteBlock = checksum;
+
+	    this.dfsclientSlowLogThresholdMs =
+	      dfsClient.getConf().dfsclientSlowIoWarningThresholdMs;
+	    this.byteArrayManager = dfsClient.getClientContext().getByteArrayManager();
+	  }
 
   /** Construct a new output stream for creating a file. */
   private DFSOutputStream(DFSClient dfsClient, String src, HdfsFileStatus stat,
@@ -1704,6 +1806,24 @@ public class DFSOutputStream extends FSOutputSummer
       streamer.setFavoredNodes(favoredNodes);
     }
   }
+  
+  private DFSOutputStream(DFSClient dfsClient, String src, HdfsFileStatus stat,
+	      EnumSet<CreateFlag> flag, Progressable progress,
+	      DataChecksum checksum, String[] favoredNodes, int partitioning) throws IOException {
+	    this(dfsClient, src, progress, stat, checksum, partitioning);
+	    this.shouldSyncBlock = flag.contains(CreateFlag.SYNC_BLOCK);
+
+	    computePacketChunkSize(dfsClient.getConf().writePacketSize, bytesPerChecksum);
+
+	    Span traceSpan = null;
+	    if (Trace.isTracing()) {
+	      traceSpan = Trace.startSpan(this.getClass().getSimpleName()).detach();
+	    }
+	    streamer = new DataStreamer(stat, traceSpan);
+	    if (favoredNodes != null && favoredNodes.length != 0) {
+	      streamer.setFavoredNodes(favoredNodes);
+	    }
+	  }
 
   static DFSOutputStream newStreamForCreate(DFSClient dfsClient, String src,
       FsPermission masked, EnumSet<CreateFlag> flag, boolean createParent,
@@ -1749,9 +1869,9 @@ public class DFSOutputStream extends FSOutputSummer
       }
     }
     Preconditions.checkNotNull(stat, "HdfsFileStatus should not be null!");
-    final DFSOutputStream out = new DFSOutputStream(dfsClient, src, stat,
-        flag, progress, checksum, favoredNodes);
+    DFSOutputStream out = new DFSOutputStream(dfsClient, src, stat, flag, progress, checksum, favoredNodes);
     out.start();
+    
     return out;
   }
 
@@ -1778,6 +1898,30 @@ public class DFSOutputStream extends FSOutputSummer
     }
     this.fileEncryptionInfo = stat.getFileEncryptionInfo();
   }
+  
+  /** Construct a new output stream for append. */
+  private DFSOutputStream(DFSClient dfsClient, String src,
+      Progressable progress, LocatedBlock lastBlock, HdfsFileStatus stat,
+      DataChecksum checksum, int partitioning) throws IOException {
+    this(dfsClient, src, progress, stat, checksum);
+    initialFileSize = stat.getLen(); // length of file when opened
+
+    Span traceSpan = null;
+    if (Trace.isTracing()) {
+      traceSpan = Trace.startSpan(this.getClass().getSimpleName()).detach();
+    }
+
+    // The last partial block of the file has to be filled.
+    if (lastBlock != null) {
+      // indicate that we are appending to an existing block
+      bytesCurBlock = lastBlock.getBlockSize();
+      streamer = new DataStreamer(lastBlock, stat, bytesPerChecksum, traceSpan, partitioning);
+    } else {
+      computePacketChunkSize(dfsClient.getConf().writePacketSize, bytesPerChecksum);
+      streamer = new DataStreamer(stat, traceSpan, partitioning);
+    }
+    this.fileEncryptionInfo = stat.getFileEncryptionInfo(partitioning);
+  }
 
   static DFSOutputStream newStreamForAppend(DFSClient dfsClient, String src,
       int buffersize, Progressable progress, LocatedBlock lastBlock,
@@ -1788,11 +1932,24 @@ public class DFSOutputStream extends FSOutputSummer
     return out;
   }
   
+  static DFSOutputStream newStreamForAppendMpsr(DFSClient dfsClient, String src,
+	      int buffersize, Progressable progress, LocatedBlock lastBlock,
+	      HdfsFileStatus stat, DataChecksum checksum, int partitioning) throws IOException {
+	    final DFSOutputStream out = new DFSOutputStream(dfsClient, src,
+	        progress, lastBlock, stat, checksum, partitioning);
+	    out.start();
+	    return out;
+	  }
+  
   private static boolean isLazyPersist(HdfsFileStatus stat) {
     final BlockStoragePolicy p = blockStoragePolicySuite.getPolicy(
         HdfsConstants.MEMORY_STORAGE_POLICY_NAME);
     return p != null && stat.getStoragePolicy() == p.getId();
   }
+  
+  private static boolean isLazyPersist(HdfsFileStatus stat, int partitioning) {
+	    return true;
+	  }
 
   private void computePacketChunkSize(int psize, int csize) {
     final int chunkSize = csize + getChecksumSize();

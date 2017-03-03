@@ -386,8 +386,8 @@ public class INodeFile extends INodeWithAdditionalFields
   public byte getStoragePolicyID() {
     byte id = getLocalStoragePolicyID();
     if (id == BlockStoragePolicySuite.ID_UNSPECIFIED) {
-      return this.getParent() != null ?
-          this.getParent().getStoragePolicyID() : id;
+      return this.isParentUDir() ? id : (this.getParent() != null ?
+          this.getParent().getStoragePolicyID() : id);
     }
     return id;
   }

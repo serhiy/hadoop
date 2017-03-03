@@ -849,6 +849,7 @@ public class PBHelper {
   }
 
   public static TokenProto convert(Token<?> tok) {
+	  
     return TokenProto.newBuilder().
               setIdentifier(ByteString.copyFrom(tok.getIdentifier())).
               setPassword(ByteString.copyFrom(tok.getPassword())).
