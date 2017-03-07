@@ -947,8 +947,7 @@ public abstract class Storage extends StorageInfo {
    * 
    * @param props the Properties object to write into
    */
-  protected void setPropertiesFromFields(Properties props, 
-                                         StorageDirectory sd)
+  protected void setPropertiesFromFields(Properties props, StorageDirectory sd)
       throws IOException {
     props.setProperty("layoutVersion", String.valueOf(layoutVersion));
     props.setProperty("storageType", storageType.toString());
@@ -958,6 +957,7 @@ public abstract class Storage extends StorageInfo {
       props.setProperty("clusterID", clusterID);
     }
     props.setProperty("cTime", String.valueOf(cTime));
+    props.setProperty("partitioning", String.valueOf(getPartitioning()));
   }
 
   /**
@@ -968,6 +968,7 @@ public abstract class Storage extends StorageInfo {
   }
   
   public void writeProperties(File to, StorageDirectory sd) throws IOException {
+	  LOG.info("--- MPSR ---: writeProperties() : Writing storage properties to " + to.getAbsolutePath());
     Properties props = new Properties();
     setPropertiesFromFields(props, sd);
     writeProperties(to, sd, props);
@@ -1118,7 +1119,9 @@ public abstract class Storage extends StorageInfo {
   public void writeAll() throws IOException {
     this.layoutVersion = getServiceLayoutVersion();
     for (Iterator<StorageDirectory> it = storageDirs.iterator(); it.hasNext();) {
-      writeProperties(it.next());
+    	StorageDirectory sd = it.next();
+    	LOG.info("--- MPSR --- : writeAll() : Writing property = " + sd);
+    	writeProperties(sd);
     }
   }
 

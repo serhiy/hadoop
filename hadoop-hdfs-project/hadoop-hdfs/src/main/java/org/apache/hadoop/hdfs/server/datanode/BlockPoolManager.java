@@ -149,7 +149,7 @@ class BlockPoolManager {
   
   void refreshNamenodes(Configuration conf)
       throws IOException {
-    LOG.info("Refresh request received for nameservices: " + conf.get
+    LOG.info("--- MPSR --- : refreshNamenodes() : Refresh request received for nameservices: " + conf.get
             (DFSConfigKeys.DFS_NAMESERVICES));
 
     Map<String, Map<String, InetSocketAddress>> newAddressMap = DFSUtil
@@ -194,7 +194,7 @@ class BlockPoolManager {
       
       // Step 3. Start new nameservices
       if (!toAdd.isEmpty()) {
-        LOG.info("Starting BPOfferServices for nameservices: " +
+        LOG.info("--- MPSR --- : doRefreshNamenodes() : Starting BPOfferServices for nameservices: " +
             Joiner.on(",").useForNull("<default>").join(toAdd));
       
         for (String nsToAdd : toAdd) {

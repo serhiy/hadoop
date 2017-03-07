@@ -313,12 +313,12 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
 
     synchronized (this) {
       volumeMap.addAll(tempVolumeMap);
-      storageMap.put(sd.getStorageUuid(),
-          new DatanodeStorage(sd.getStorageUuid(),
-              DatanodeStorage.State.NORMAL,
-              storageType));
+      DatanodeStorage dns = new DatanodeStorage(sd.getStorageUuid(), DatanodeStorage.State.NORMAL, storageType);
+      storageMap.put(sd.getStorageUuid(), dns);
       asyncDiskService.addVolume(sd.getCurrentDir());
       volumes.addVolume(fsVolume);
+      
+      LOG.info("--- MPSR --- : addVolume() : private adding volume ");
     }
 
     LOG.info("Added volume - " + dir + ", StorageType: " + storageType);
@@ -335,6 +335,8 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       final List<NamespaceInfo> nsInfos)
       throws IOException {
     final File dir = location.getFile();
+    
+    LOG.info("--- MPSR --- : addVolume() : public adding volume ");
 
     // Prepare volume in DataStorage
     DataStorage.VolumeBuilder builder =

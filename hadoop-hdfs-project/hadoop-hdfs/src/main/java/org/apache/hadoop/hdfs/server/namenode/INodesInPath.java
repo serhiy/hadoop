@@ -455,13 +455,13 @@ public class INodesInPath {
     	  changed = true;
       } else {
     	  LOG.info("--- MPSR ---: resolveMpsr(): Child NOT found! [curNode = '" + curNode.getLocalName() + "', child = '" + DFSUtil.bytes2String(childName) + "']");
-    	  changed = true;
+    	  changed = false;
       }
       
       count++;
       index++;
     }
-
+    
     String p = FSDirectory.printINodes(existingInodes.toArray(new INode[existingInodes.size()]));
     LOG.info("--- MPSR ---: resolveMpsr(): Determining path components for " + p);
     final INodesInPath existing = new INodesInPath(INode.getPathComponents(p), existingInodes.size()+1);
@@ -471,10 +471,62 @@ public class INodesInPath {
     //existing.addNode(null);
     
     LOG.trace("--- MPSR ---: resolveMpsr(): Path resolved. [path = '" + existing.toString(false) + "']");
-    
+
     return existing;
   }
   
+  
+  static INodesInPath resolveMpsrExact(final INodeDirectory startingDir, final byte[][] components) throws UnresolvedLinkException {
+	  
+	  for (int partitioning = 0; partitioning < MPSRPartitioningProvider.NUM_PARTITIONS; partitioning++) {
+		  int count = 1;
+		  boolean found = true;
+		  INode currNode = startingDir.getUnderlyingDirectory(partitioning);
+		  List<INode> existingINodes = new ArrayList<INode>();
+		  while (count <= components.length) {
+			  existingINodes.add(currNode);
+			  if (currNode == null || count >= components.length) {
+				  break;
+			  }
+			  
+			  if (currNode.isUnderlyingDirectory()) {
+				  currNode = ((INodeUnderlyingDirectory)currNode).getChild(components[count], Snapshot.CURRENT_STATE_ID);
+				  if (currNode == null && (count + 1) < components.length) {
+					  found = false;
+				  }
+			  }
+			  
+			  count ++;
+		  }
+		  
+		  INode lastNotNull = getLastNotNull(existingINodes);
+		  if (found && lastNotNull.isUnderlyingDirectory() && existingINodes.indexOf(lastNotNull) == MPSRPartitioningProvider.getPartitioningTags(partitioning).size()) {
+			  INodesInPath iip = new INodesInPath(components, components.length);
+			  for (INode existingINode : existingINodes) {
+				  iip.addNode(existingINode);
+			  }
+			  return iip;
+		  } else if (found && lastNotNull.isFile()) {
+			  INodesInPath iip = new INodesInPath(components, components.length);
+			  for (INode existingINode : existingINodes) {
+				  iip.addNode(existingINode);
+			  }
+			  return iip;
+		  }
+	  }
+	  
+	  return null;
+  }
+  
+  private static INode getLastNotNull(List<INode> existingINodes) {
+	  INode result = null;
+	  for (INode existingInode : existingINodes) {
+		  if (existingInode != null) {
+			  result = existingInode;
+		  }
+	  }
+	  return result;
+  }
   
   
   

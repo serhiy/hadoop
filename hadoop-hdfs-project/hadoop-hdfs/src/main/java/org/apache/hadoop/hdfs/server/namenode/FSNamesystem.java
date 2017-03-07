@@ -571,29 +571,48 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   
   
   //serhiy
-  private static final int NUM_DIFFERENT_PARTITIONS = 3;
-  private Map<Integer, Integer> partitioningTypePerNode = new HashMap<Integer, Integer>();
-  private Object pTypeLock = new Object();
+  private Map<Integer, Integer> partitioningPerNode = new HashMap<Integer, Integer>();
+  private Object partitioningLock = new Object();
   
   PartitioningTypeInfo getNextPartitioningType() {
 	  PartitioningTypeInfo partitioningTypeInfo = new PartitioningTypeInfo();
 	  
-	  synchronized(pTypeLock) {
-		  int pType = 0, minCount = Integer.MAX_VALUE;
-		  for (int count = 0; count < NUM_DIFFERENT_PARTITIONS; count++) {
-			  if (!partitioningTypePerNode.containsKey(count)) {
-				  partitioningTypePerNode.put(count, 0);
+	  synchronized(partitioningLock) {
+		  int partitioning = 0, minCount = Integer.MAX_VALUE;
+		  for (int count = 0; count < MPSRPartitioningProvider.NUM_PARTITIONS; count++) {
+			  if (!partitioningPerNode.containsKey(count)) {
+				  partitioningPerNode.put(count, 0);
 			  }
-			  if (partitioningTypePerNode.get(count) < minCount) {
-				  minCount = partitioningTypePerNode.get(count);
-				  pType = count;
+			  if (partitioningPerNode.get(count) < minCount) {
+				  minCount = partitioningPerNode.get(count);
+				  partitioning = count;
 			  }
 		  }
-		  partitioningTypePerNode.put(pType, partitioningTypePerNode.get(pType));
-		  partitioningTypeInfo.setpType(pType);
+		  partitioningPerNode.put(partitioning, partitioningPerNode.get(partitioning) + 1);
+		  partitioningTypeInfo.setpType(partitioning);
+		  LOG.info("--- MPSR ---: getNextPartitioningType() : Assinged partitioning = " + partitioning);
+	  }
+	  
+	  LOG.info("--- MPSR ---: getNextPartitioningType() : Current partitioning per nodes: ");
+	  for (Map.Entry<Integer, Integer> partitioningEntry: partitioningPerNode.entrySet()) {
+		  LOG.info("--- MPSR ---: getNextPartitioningType() : --- partitioning = " + partitioningEntry.getKey() + ", numNodes = " + partitioningEntry.getValue());
 	  }
 	  
 	  return partitioningTypeInfo;
+  }
+  
+  public void updatePartitioningPerNode(int partitioning) {
+	  synchronized(partitioningLock) {
+		  if (!partitioningPerNode.containsKey(partitioning)) {
+			  partitioningPerNode.put(partitioning, 0);
+		  }
+		  partitioningPerNode.put(partitioning, partitioningPerNode.get(partitioning) + 1);
+	  }
+	  
+	  LOG.info("--- MPSR ---: updatePartitioningPerNode() : Current partitioning per nodes: ");
+	  for (Map.Entry<Integer, Integer> partitioningEntry: partitioningPerNode.entrySet()) {
+		  LOG.info("--- MPSR ---: updatePartitioningPerNode() : --- partitioning = " + partitioningEntry.getKey() + ", numNodes = " + partitioningEntry.getValue());
+	  }
   }
   
   

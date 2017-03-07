@@ -1103,6 +1103,8 @@ public class DataNode extends ReconfigurableBase
     metrics = DataNodeMetrics.create(conf, getDisplayName());
     metrics.getJvmMetrics().setPauseMonitor(pauseMonitor);
     
+    LOG.info("--- MPSR --- : startDataNode() : Refresh namenodes.");
+    
     blockPoolManager = new BlockPoolManager(this);
     blockPoolManager.refreshNamenodes(conf);
 
@@ -1171,20 +1173,18 @@ public class DataNode extends ReconfigurableBase
   private synchronized void checkDatanodeUuid() throws IOException {
     if (storage.getDatanodeUuid() == null) {
       storage.setDatanodeUuid(generateUuid());
-      
-      
+
       //serhiy
       BPOfferService bpOfferService = blockPoolManager.getAllNamenodeThreads()[0];
       PartitioningTypeInfo partitioningTypeInfo = bpOfferService.partitioningTypeInfo();
+      
+      LOG.info("--- MPSR --- : checkDatanodeUuid() : Partitioning type = " + partitioningTypeInfo.getpType());
       storage.setPartitioningType(partitioningTypeInfo.getpType());
-      
-      
-      
-      
-      
       storage.writeAll();
-      LOG.info("Generated and persisted new Datanode UUID " +
-               storage.getDatanodeUuid());
+      
+      LOG.info("Generated and persisted new Datanode UUID " + storage.getDatanodeUuid());
+    } else {
+    	LOG.info("--- MPSR ---: checkDatanodeUuid() : Data storage id is not null " + storage.getDatanodeUuid());
     }
   }
 
@@ -1194,6 +1194,7 @@ public class DataNode extends ReconfigurableBase
    */
   DatanodeRegistration createBPRegistration(NamespaceInfo nsInfo) {
     StorageInfo storageInfo = storage.getBPStorage(nsInfo.getBlockPoolID());
+    
     if (storageInfo == null) {
       // it's null in the case of SimulatedDataSet
       storageInfo = new StorageInfo(
@@ -1201,13 +1202,17 @@ public class DataNode extends ReconfigurableBase
           nsInfo.getNamespaceID(), nsInfo.clusterID, nsInfo.getCTime(),
           NodeType.DATA_NODE);
     }
-
+    
     DatanodeID dnId = new DatanodeID(
         streamingAddr.getAddress().getHostAddress(), hostName, 
         storage.getDatanodeUuid(), getXferPort(), getInfoPort(),
             infoSecurePort, getIpcPort());
-    return new DatanodeRegistration(dnId, storageInfo, 
-        new ExportedBlockKeys(), VersionInfo.getVersion());
+
+    DatanodeRegistration dnr = new DatanodeRegistration(dnId, storageInfo, 
+            new ExportedBlockKeys(), VersionInfo.getVersion());
+    LOG.info("--- MPSR --- : createBPRegistration() : Setting partitioning for datanode registration = " + storageInfo.getPartitioning());
+    dnr.setPartitioning(storageInfo.getPartitioning());
+    return dnr;
   }
 
   /**
@@ -1311,7 +1316,7 @@ public class DataNode extends ReconfigurableBase
     }
     
     setClusterId(nsInfo.clusterID, nsInfo.getBlockPoolID());
-
+    
     // Register the new block pool with the BP manager.
     blockPoolManager.addBlockPool(bpos);
     
@@ -1343,6 +1348,8 @@ public class DataNode extends ReconfigurableBase
     final FsDatasetSpi.Factory<? extends FsDatasetSpi<?>> factory
         = FsDatasetSpi.Factory.getFactory(conf);
     
+    LOG.info("--- MPSR --- : initStorage() : ----- Initializating storage.");
+    
     if (!factory.isSimulated()) {
       final StartupOption startOpt = getStartupOption(conf);
       if (startOpt == null) {
@@ -1353,7 +1360,13 @@ public class DataNode extends ReconfigurableBase
       synchronized (this) {
         storage.recoverTransitionRead(this, nsInfo, dataDirs, startOpt);
       }
+      
       final StorageInfo bpStorage = storage.getBPStorage(bpid);
+      if (bpStorage.getPartitioning() < 0 || nsInfo.getPartitioning() >= 0) {
+          LOG.info("--- MPSR ---: initStorage() : Setting block storage partitioning = " + nsInfo.getPartitioning());
+          bpStorage.setPartitioning(nsInfo.getPartitioning());
+      }
+
       LOG.info("Setting up storage: nsid=" + bpStorage.getNamespaceID()
           + ";bpid=" + bpid + ";lv=" + storage.getLayoutVersion()
           + ";nsInfo=" + nsInfo + ";dnuuid=" + storage.getDatanodeUuid());
@@ -1361,7 +1374,7 @@ public class DataNode extends ReconfigurableBase
 
     // If this is a newly formatted DataNode then assign a new DatanodeUuid.
     checkDatanodeUuid();
-
+    
     synchronized(this)  {
       if (data == null) {
         data = factory.newInstance(this, storage, conf);
@@ -3080,7 +3093,7 @@ public class DataNode extends ReconfigurableBase
   }
   
   public Integer getParitioningType() {
-	    return id == null ? null : id.getPartitioningType();
+	    return id == null ? null : id.getPartitioning();
   }
 
 

@@ -23,6 +23,8 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.List;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
@@ -47,6 +49,7 @@ import org.apache.hadoop.hdfs.protocol.proto.DatanodeProtocolProtos.StorageBlock
 import org.apache.hadoop.hdfs.protocol.proto.DatanodeProtocolProtos.StorageReceivedDeletedBlocksProto;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.PartitioningTypeRequestProto;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.VersionRequestProto;
+import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.protocol.BlockReportContext;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeCommand;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeProtocol;
@@ -78,6 +81,8 @@ import com.google.protobuf.ServiceException;
 @InterfaceStability.Stable
 public class DatanodeProtocolClientSideTranslatorPB implements
     ProtocolMetaInterface, DatanodeProtocol, Closeable {
+	
+	public static final Log LOG = LogFactory.getLog(DatanodeProtocolClientSideTranslatorPB.class);
   
   /** RpcController is not used and hence is set to null */
   private final DatanodeProtocolPB rpcProxy;
@@ -112,8 +117,8 @@ public class DatanodeProtocolClientSideTranslatorPB implements
   @Override
   public DatanodeRegistration registerDatanode(DatanodeRegistration registration
       ) throws IOException {
-    RegisterDatanodeRequestProto.Builder builder = RegisterDatanodeRequestProto
-        .newBuilder().setRegistration(PBHelper.convert(registration));
+	  LOG.info("--- MPSR ---: registerDatanode() : Registering datanode partitioning = " + registration.getPartitioning());
+    RegisterDatanodeRequestProto.Builder builder = RegisterDatanodeRequestProto.newBuilder().setRegistration(PBHelper.convert(registration));
     RegisterDatanodeResponseProto resp;
     try {
       resp = rpcProxy.registerDatanode(NULL_CONTROLLER, builder.build());

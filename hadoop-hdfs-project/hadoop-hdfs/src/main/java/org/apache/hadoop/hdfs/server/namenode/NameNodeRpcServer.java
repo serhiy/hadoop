@@ -27,6 +27,7 @@ import static org.apache.hadoop.hdfs.protocol.HdfsConstants.MAX_PATH_LENGTH;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.EnumSet;
@@ -712,18 +713,23 @@ class NameNodeRpcServer implements NamenodeProtocols {
       stateChangeLog.debug("*BLOCK* NameNode.addBlock: file " + src
           + " fileId=" + fileId + " for " + clientName);
     }
-    Set<Node> excludedNodesSet = null;
+    Set<Node> excludedNodesSet = new HashSet<Node>();
     if (excludedNodes != null) {
-      excludedNodesSet = new HashSet<Node>(excludedNodes.length);
       for (Node node : excludedNodes) {
         excludedNodesSet.add(node);
       }
     }
-    List<String> favoredNodesList = (favoredNodes == null) ? null
+    List<String> favoredNodesList = (favoredNodes == null) ? new ArrayList<String>()
         : Arrays.asList(favoredNodes);
     
     LocatedBlock locatedBlock;
     if (MPSRPartitioningProvider.isMpsr(src)) {
+    	INodesInPath iip = INodesInPath.resolveMpsrExact(namesystem.dir.rootDir, INode.getPathComponents(src));
+        int partitioning = ((INodeUnderlyingDirectory)iip.getINode(0)).getPartitioning();
+        LOG.info("--- MPSR --- : addBlock() : Checking partitioning exluded/included nodes " + partitioning);
+        excludedNodesSet.addAll(namesystem.getBlockManager().getDatanodeManager().getPartitioningExcludedNodes(partitioning));
+        favoredNodesList.addAll(namesystem.getBlockManager().getDatanodeManager().getPartitioningIncludedNodes(partitioning));
+        
     	locatedBlock = namesystem.getAdditionalBlockMpsr(src, fileId, clientName, previous, excludedNodesSet, favoredNodesList);
     } else {
     	locatedBlock = namesystem.getAdditionalBlock(src, fileId, clientName, previous, excludedNodesSet, favoredNodesList);
@@ -1220,6 +1226,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
       throws IOException {
     checkNNStartup();
     verifySoftwareVersion(nodeReg);
+    LOG.info("--- MPSR ---: registerDatanode() : Registering new datanode with partitioning = " + nodeReg);
     namesystem.registerDatanode(nodeReg);
     return nodeReg;
   }
@@ -1329,15 +1336,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
     namesystem.checkSuperuserPrivilege();
     return namesystem.getNamespaceInfo();
   }
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
   
   
   

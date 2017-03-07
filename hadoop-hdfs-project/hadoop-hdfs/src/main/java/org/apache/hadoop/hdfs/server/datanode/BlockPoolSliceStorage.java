@@ -157,7 +157,7 @@ public class BlockPoolSliceStorage extends Storage {
       case NOT_FORMATTED: // format
         LOG.info("Block pool storage directory " + dataDir
             + " is not formatted for " + nsInfo.getBlockPoolID());
-        LOG.info("Formatting ...");
+        LOG.info("--- MPSR ---: BlockPoolSliceStorage.loadStorageDirectory() : Formatting ...");
         format(sd, nsInfo);
         break;
       default:  // recovery part is common
@@ -271,6 +271,7 @@ public class BlockPoolSliceStorage extends Storage {
     this.cTime = nsInfo.getCTime();
     this.namespaceID = nsInfo.getNamespaceID();
     this.blockpoolID = nsInfo.getBlockPoolID();
+    this.setPartitioning(nsInfo.getPartitioning());
     writeProperties(bpSdir);
   }
 
@@ -299,6 +300,8 @@ public class BlockPoolSliceStorage extends Storage {
     props.setProperty("namespaceID", String.valueOf(namespaceID));
     props.setProperty("blockpoolID", blockpoolID);
     props.setProperty("cTime", String.valueOf(cTime));
+    LOG.info("--- MPSR --- : BlockPoolSliceStorage.setPropertiesFromFields() : Setting partitioning = " + getPartitioning());
+    props.setProperty("partitioning", String.valueOf(getPartitioning()));
   }
 
   /** Validate and set block pool ID */
@@ -322,6 +325,7 @@ public class BlockPoolSliceStorage extends Storage {
     setLayoutVersion(props, sd);
     setNamespaceID(props, sd);
     setcTime(props, sd);
+    setPartitioning(props, sd);
     
     String sbpid = props.getProperty("blockpoolID");
     setBlockPoolID(sd.getRoot(), sbpid);

@@ -120,6 +120,8 @@ class BPOfferService {
     Preconditions.checkArgument(!nnAddrs.isEmpty(),
         "Must pass at least one NN.");
     this.dn = dn;
+    
+    LOG.info("--- MPSR --- : BPOfferService() : Creating BPOfferService.");
 
     for (InetSocketAddress addr : nnAddrs) {
       this.bpServices.add(new BPServiceActor(addr, this));

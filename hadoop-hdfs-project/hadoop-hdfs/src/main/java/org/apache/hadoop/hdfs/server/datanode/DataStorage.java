@@ -151,6 +151,15 @@ public class DataStorage extends Storage {
   
   public synchronized void setPartitioningType(Integer newPartitioningType) {
 	  this.partitioningType = newPartitioningType;
+	  for (BlockPoolSliceStorage blockPoolSliceStorage: bpStorageMap.values()) {
+		  LOG.info("--- MPSR --- : setPartitioningType() : Setting partitioning " + newPartitioningType + " to " + blockPoolSliceStorage);
+		  blockPoolSliceStorage.setPartitioning(newPartitioningType);
+		  try {
+			blockPoolSliceStorage.writeAll();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	  }
   }
 
   /** Create an ID for this storage.
@@ -284,7 +293,7 @@ public class DataStorage extends Storage {
       case NOT_FORMATTED: // format
         LOG.info("Storage directory " + dataDir + " is not formatted for "
             + nsInfo.getBlockPoolID());
-        LOG.info("Formatting ...");
+        LOG.info("--- MPSR ---: DataStorage.loadStorageDirectory() : Formatting ...");
         format(sd, nsInfo, datanode.getDatanodeUuid(), datanode.getParitioningType());
         break;
       default:  // recovery part is common
@@ -348,6 +357,8 @@ public class DataStorage extends Storage {
           bpStorage = new BlockPoolSliceStorage(
               nsInfo.getNamespaceID(), bpid, nsInfo.getCTime(),
               nsInfo.getClusterID());
+          LOG.info("--- MPSR --- : prepareVolume() : Setting block storage partitioning = " + nsInfo.getPartitioning());
+          bpStorage.setPartitioning(nsInfo.getPartitioning());
           addBlockPoolStorage(bpid, bpStorage);
         }
       }
@@ -401,6 +412,8 @@ public class DataStorage extends Storage {
           bpStorage = new BlockPoolSliceStorage(
               nsInfo.getNamespaceID(), bpid, nsInfo.getCTime(),
               nsInfo.getClusterID());
+          LOG.info("--- MPSR --- : addStorageLocations() : Adding partitioning to block storage = " + nsInfo.getPartitioning());
+          bpStorage.setPartitioning(nsInfo.getPartitioning());
         }
 
         bpStorage.recoverTransitionRead(datanode, nsInfo, bpDataDirs, startOpt);
@@ -525,7 +538,7 @@ public class DataStorage extends Storage {
     this.namespaceID = nsInfo.getNamespaceID();
     this.cTime = 0;
     setDatanodeUuid(datanodeUuid);
-    setPartitioningType(partitioningType);
+    setPartitioningType(partitioningType!=null?partitioningType:-1);
 
     if (sd.getStorageUuid() == null) {
       // Assign a new Storage UUID.
@@ -561,6 +574,9 @@ public class DataStorage extends Storage {
         LayoutVersion.Feature.FEDERATION, layoutVersion)) {
       props.setProperty("namespaceID", String.valueOf(namespaceID));
     }
+    
+    LOG.info("--- MPSR ---: setPropertiesFromFields() : Writing partitioning " + partitioningType); 
+    props.setProperty("partitioning", String.valueOf(partitioningType));
   }
 
   /*
@@ -623,8 +639,8 @@ public class DataStorage extends Storage {
       }
     }
     
-    if (props.getProperty("partitioningType") != null) {
-    	Integer partitioningType = Integer.parseInt(props.getProperty("partitioningType"));
+    if (props.getProperty("partitioning") != null) {
+    	Integer partitioningType = Integer.parseInt(props.getProperty("partitioning"));
     	
     	if (getPartitoningType() == null) {
             setPartitioningType(partitioningType);
@@ -1324,8 +1340,7 @@ public class DataStorage extends Storage {
   /**
    * Add bpStorage into bpStorageMap
    */
-  private void addBlockPoolStorage(String bpID, BlockPoolSliceStorage bpStorage
-      ) {
+  private void addBlockPoolStorage(String bpID, BlockPoolSliceStorage bpStorage) {
     if (!this.bpStorageMap.containsKey(bpID)) {
       this.bpStorageMap.put(bpID, bpStorage);
     }

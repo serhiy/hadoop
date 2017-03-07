@@ -818,6 +818,7 @@ class BPServiceActor implements Runnable {
     while (shouldRun()) {
       try {
         // Use returned registration from namenode with updated fields
+    	  LOG.info("--- MPSR ---: register() : BPRegistration partitioning " + bpRegistration.getPartitioning());
         bpRegistration = bpNamenode.registerDatanode(bpRegistration);
         break;
       } catch(EOFException e) {  // namenode might have just restarted

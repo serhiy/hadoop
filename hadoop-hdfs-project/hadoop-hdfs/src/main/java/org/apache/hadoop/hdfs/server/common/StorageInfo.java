@@ -25,6 +25,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.SortedSet;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants;
 import org.apache.hadoop.hdfs.protocol.LayoutVersion;
@@ -44,10 +46,13 @@ import com.google.common.base.Joiner;
  */
 @InterfaceAudience.Private
 public class StorageInfo {
+	private static final Log LOG = LogFactory.getLog(StorageInfo.class.getName());
+	
   public int   layoutVersion;   // layout version of the storage data
   public int   namespaceID;     // id of the file system
   public String clusterID;      // id of the cluster
   public long  cTime;           // creation time of the file system state
+  private int partitioning = -1;
 
   protected final NodeType storageType; // Type of the node using this storage 
 
@@ -132,6 +137,7 @@ public class StorageInfo {
     setNamespaceID(props, sd);
     setcTime(props, sd);
     setClusterId(props, layoutVersion, sd);
+    setPartitioning(props, sd);
     checkStorageType(props, sd);
   }
 
@@ -153,6 +159,12 @@ public class StorageInfo {
   protected void setcTime(Properties props, StorageDirectory sd)
       throws InconsistentFSStateException {
     cTime = Long.parseLong(getProperty(props, sd, "cTime"));
+  }
+  
+  /** Validate and set ctime from {@link Properties}*/
+  protected void setPartitioning(Properties props, StorageDirectory sd)
+      throws InconsistentFSStateException {
+    partitioning = Integer.parseInt(getProperty(props, sd, "partitioning"));
   }
 
   /** Validate and set clusterId from {@link Properties}*/
@@ -228,6 +240,7 @@ public class StorageInfo {
    * Read properties from the VERSION file in the given storage directory.
    */
   public void readProperties(StorageDirectory sd) throws IOException {
+	  LOG.info("--- MPSR --- : readProperties() : Reading properties from " + sd.getVersionFile().getAbsolutePath());
     Properties props = readPropertiesFile(sd.getVersionFile());
     setFieldsFromProperties(props, sd);
   }
@@ -257,4 +270,12 @@ public class StorageInfo {
     }
     return props;
   }
+
+public int getPartitioning() {
+	return partitioning;
+}
+
+public void setPartitioning(int partitioning) {
+	this.partitioning = partitioning;
+}
 }

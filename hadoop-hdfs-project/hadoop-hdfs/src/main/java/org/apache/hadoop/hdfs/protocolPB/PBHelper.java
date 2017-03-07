@@ -59,6 +59,8 @@ import org.apache.hadoop.hdfs.protocol.CacheDirectiveStats;
 import org.apache.hadoop.hdfs.protocol.CachePoolEntry;
 import org.apache.hadoop.hdfs.protocol.CachePoolInfo;
 import org.apache.hadoop.hdfs.protocol.CachePoolStats;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.crypto.CipherOption;
 import org.apache.hadoop.crypto.CipherSuite;
 import org.apache.hadoop.hdfs.protocol.ClientProtocol;
@@ -245,6 +247,8 @@ import com.google.protobuf.CodedInputStream;
  * being null must be done before calling the convert() method.
  */
 public class PBHelper {
+	public static final Log LOG = LogFactory.getLog(PBHelper.class);
+	
   private static final RegisterCommandProto REG_CMD_PROTO = 
       RegisterCommandProto.newBuilder().build();
   private static final RegisterCommand REG_CMD = new RegisterCommand();
@@ -379,9 +383,12 @@ public class PBHelper {
 
   // DatanodeId
   public static DatanodeID convert(DatanodeIDProto dn) {
-    return new DatanodeID(dn.getIpAddr(), dn.getHostName(), dn.getDatanodeUuid(),
+	  DatanodeID datanodeID = new DatanodeID(dn.getIpAddr(), dn.getHostName(), dn.getDatanodeUuid(),
         dn.getXferPort(), dn.getInfoPort(), dn.hasInfoSecurePort() ? dn
         .getInfoSecurePort() : 0, dn.getIpcPort());
+	  //LOG.info("--- MPSR --- : convert() : Converting partitioning = " + dn.getPartitioning());
+	  datanodeID.setPartitioning(dn.getPartitioning());
+	  return datanodeID;
   }
 
   public static DatanodeIDProto convert(DatanodeID dn) {
@@ -395,7 +402,9 @@ public class PBHelper {
         .setDatanodeUuid(dn.getDatanodeUuid() != null ? dn.getDatanodeUuid() : "")
         .setInfoPort(dn.getInfoPort())
         .setInfoSecurePort(dn.getInfoSecurePort())
-        .setIpcPort(dn.getIpcPort()).build();
+        .setIpcPort(dn.getIpcPort())
+        .setPartitioning(dn.getPartitioning())
+        .build();
   }
 
   // Arrays of DatanodeId
@@ -916,8 +925,10 @@ public class PBHelper {
 
   public static DatanodeRegistration convert(DatanodeRegistrationProto proto) {
     StorageInfo si = convert(proto.getStorageInfo(), NodeType.DATA_NODE);
-    return new DatanodeRegistration(PBHelper.convert(proto.getDatanodeID()),
+    DatanodeRegistration dr = new DatanodeRegistration(PBHelper.convert(proto.getDatanodeID()),
         si, PBHelper.convert(proto.getKeys()), proto.getSoftwareVersion());
+    dr.setPartitioning(proto.getDatanodeID().getPartitioning());
+    return dr;
   }
 
   public static DatanodeCommand convert(DatanodeCommandProto proto) {

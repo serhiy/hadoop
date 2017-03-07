@@ -21,6 +21,8 @@ package org.apache.hadoop.hdfs.protocolPB;
 import java.io.IOException;
 import java.util.List;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hdfs.protocol.DatanodeID;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
 import org.apache.hadoop.hdfs.protocol.RollingUpgradeStatus;
@@ -65,6 +67,8 @@ import com.google.protobuf.ServiceException;
 
 public class DatanodeProtocolServerSideTranslatorPB implements
     DatanodeProtocolPB {
+	
+	public static final Log LOG = LogFactory.getLog(DatanodeProtocolServerSideTranslatorPB.class.getName());
 
   private final DatanodeProtocol impl;
   private static final ErrorReportResponseProto
@@ -88,16 +92,21 @@ public class DatanodeProtocolServerSideTranslatorPB implements
   public RegisterDatanodeResponseProto registerDatanode(
       RpcController controller, RegisterDatanodeRequestProto request)
       throws ServiceException {
-    DatanodeRegistration registration = PBHelper.convert(request
-        .getRegistration());
+	  
+	  LOG.info("--- MPSR --- : registerDatanode() : 0 - Response partitioning type = " + request.getRegistration().getDatanodeID().getPartitioning()); 
+	  
+    DatanodeRegistration registration = PBHelper.convert(request.getRegistration());
+    
+    LOG.info("--- MPSR --- : registerDatanode() : 1 - Response partitioning type = " + registration.getPartitioning());
     DatanodeRegistration registrationResp;
     try {
       registrationResp = impl.registerDatanode(registration);
     } catch (IOException e) {
       throw new ServiceException(e);
     }
-    return RegisterDatanodeResponseProto.newBuilder()
-        .setRegistration(PBHelper.convert(registrationResp)).build();
+    LOG.info("--- MPSR --- : registerDatanode() : 2 - Response partitioning type = " + registrationResp.getPartitioning());
+    
+    return RegisterDatanodeResponseProto.newBuilder().setRegistration(PBHelper.convert(registrationResp)).build();
   }
 
   @Override
