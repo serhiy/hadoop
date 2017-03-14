@@ -391,9 +391,17 @@ public class FSDirectory implements Closeable {
       UnresolvedLinkException, SnapshotAccessControlException, AclException {
 
     long modTime = now();
-    INodeFile newNode = newINodeFile(namesystem.allocateNewInodeId(),
-        permissions, modTime, modTime, replication, preferredBlockSize);
-    newNode.toUnderConstruction(clientName, clientMachine);
+    
+    byte[][] components = INode.getPathComponents(path);
+    INodesInPath iip = getExistingPathINodesMpsr(components, path, partitioningType);
+    INodeFile newNode = null;
+    if (iip.getINode(iip.length() - 2) != null && !(iip.getINode(iip.length() - 2) instanceof INodeFile)) {
+    	newNode = newINodeFile(namesystem.allocateNewInodeId(), permissions, modTime, modTime, (short)Math.ceil(replication/MPSRPartitioningProvider.NUM_PARTITIONS), preferredBlockSize); 
+    	newNode.toUnderConstruction(clientName, clientMachine);
+    } else if (iip.getINode(iip.length() - 2) != null && (iip.getINode(iip.length() - 2) instanceof INodeFile)) {
+    	NameNode.stateChangeLog.info("--- MPSR ---: DIR* addFile: " + path + " is added");
+    	return iip.getINode(iip.length() - 2).asFile();
+    }
 
     boolean added = false;
     writeLock();
@@ -411,41 +419,6 @@ public class FSDirectory implements Closeable {
     
     return newNode;
   }
-  
-  
-  
-  INodeFile addFileMpsr(String path,
-			PermissionStatus permissions,
-          short replication, long preferredBlockSize,
-          String clientName, String clientMachine)
-		throws FileAlreadyExistsException, QuotaExceededException,
-		UnresolvedLinkException, SnapshotAccessControlException, AclException {
-		
-		long modTime = now();
-		INodeFile newNode = newINodeFile(namesystem.allocateNewInodeId(), permissions, modTime, modTime, replication, preferredBlockSize);
-		newNode.toUnderConstruction(clientName, clientMachine);
-		
-		boolean added = false;
-		writeLock();
-		try {
-		added = addINodeMpsr(path, newNode);
-		} finally {
-		writeUnlock();
-		}
-		if (!added) {
-		NameNode.stateChangeLog.info("--- MPSR ---: DIR* addFile: failed to add " + path);
-		return null;
-		}
-		
-		NameNode.stateChangeLog.info("--- MPSR ---: DIR* addFile: " + path + " is added");
-		
-		return newNode;
-  }
-  
-  
-  
-  
-  
   
   
   
@@ -520,17 +493,32 @@ public class FSDirectory implements Closeable {
 	          String clientMachine,
 	          byte storagePolicyId,
 	          int partitioning) {
-		final INodeFile newNode;
+
 		assert hasWriteLock();
-		if (underConstruction) {
-			newNode = newINodeFile(id, permissions, modificationTime,
-			modificationTime, replication, preferredBlockSize, storagePolicyId);
-			
-			newNode.toUnderConstruction(clientName, clientMachine);
-		} else {
-			newNode = newINodeFile(id, permissions, modificationTime, atime,
-			replication, preferredBlockSize, storagePolicyId);
+		
+		
+	    byte[][] components = INode.getPathComponents(path);
+	    INodesInPath iip = null;
+		try {
+			iip = getExistingPathINodesMpsr(components, path, partitioning);
+		} catch (UnresolvedLinkException e1) {
+			e1.printStackTrace();
 		}
+	    INodeFile newNode = null;
+	    if (iip.getINode(iip.length() - 2) != null && !(iip.getINode(iip.length() - 2) instanceof INodeFile)) {
+	    	if (underConstruction) {
+				newNode = newINodeFile(id, permissions, modificationTime,
+				modificationTime, (short)Math.ceil(replication/MPSRPartitioningProvider.NUM_PARTITIONS), preferredBlockSize, storagePolicyId);
+				
+				newNode.toUnderConstruction(clientName, clientMachine);
+			} else {
+				newNode = newINodeFile(id, permissions, modificationTime, atime,
+				replication, preferredBlockSize, storagePolicyId);
+			}
+	    } else if (iip.getINode(iip.length() - 2) != null && (iip.getINode(iip.length() - 2) instanceof INodeFile)) {
+	    	NameNode.stateChangeLog.info("--- MPSR ---: DIR* addFile: " + path + " is added");
+	    	return iip.getINode(iip.length() - 2).asFile();
+	    }
 		
 		NameNode.LOG.trace("--- MPSR ---: unprotectedAddFileMpsr() : Adding INodeFile " + newNode.getLocalName());
 		
@@ -2223,8 +2211,7 @@ public class FSDirectory implements Closeable {
     Map<INodeDirectory, INodeUnderlyingDirectory[]> ret = new HashMap<INodeDirectory, INodeUnderlyingDirectory[]>();
     INodeUnderlyingDirectory[] retUD = underlyingDirectories;
     
-    final INodeDirectory dir = new INodeDirectory(inodeId, name, permission,
-        timestamp);
+    final INodeDirectory dir = new INodeDirectory(inodeId, name, permission, timestamp);
     if (addChildMpsr(inodesInPath, pos, dir, true)) {
       /*if (aclEntries != null) {
         AclStorage.updateINodeAcl(dir, aclEntries, Snapshot.CURRENT_STATE_ID);
@@ -2232,7 +2219,7 @@ public class FSDirectory implements Closeable {
       inodesInPath.setINode(pos, dir);
       
       for (int j = 0; j < MPSRPartitioningProvider.NUM_PARTITIONS; j++) {
-    	  retUD[j] = mkdirUnderlying(dir, (INodeUnderlyingDirectory)underlyingDirectories[j], DFSUtil.bytes2String(name), j);
+    	  retUD[j] = mkdirUnderlying(dir, underlyingDirectories[j], DFSUtil.bytes2String(name), j);
       }
       
       ret.put(dir, retUD);
@@ -2266,17 +2253,24 @@ public class FSDirectory implements Closeable {
   
   
   public INodeUnderlyingDirectory mkdirUnderlying(INodeDirectory master, INodeUnderlyingDirectory parent, String subdirectory, int partitioning) {
+	  NameNode.LOG.info("--- MPSR ---: mkdirUnderlying() : Subdirectory = " + subdirectory + ", partitioning = " + partitioning); 
 	  INodeUnderlyingDirectory underlyingDirectory = null;
 	  if (MPSRPartitioningProvider.getPartitioningTags(partitioning).contains(MPSRPartitioningProvider.getTag(subdirectory))) {
+		  NameNode.LOG.info("--- MPSR ---: mkdirUnderlying() : Partitioning tag contains = " + MPSRPartitioningProvider.getTag(subdirectory)); 
 		  for (INode inode: parent.getChildrenList()) {
 			  if (inode.getLocalName().equals(subdirectory)) {
 				  underlyingDirectory = (INodeUnderlyingDirectory) inode;
 			  }
 		  }
+		  
+		  if (underlyingDirectory != null) {
+			  NameNode.LOG.info("--- MPSR ---: mkdirUnderlying() : Underlying directory already exists. Will not create directory.");
+			  return underlyingDirectory;
+		  }
+		  
 		  underlyingDirectory = new INodeUnderlyingDirectory(namesystem.allocateNewInodeId(), DFSUtil.string2Bytes(subdirectory), master.getPermissionStatus(), master.getAccessTime());
 		  underlyingDirectory.setPartitioning(partitioning);
 		  underlyingDirectory.setMaster(master);
-		  
 		  addToInodeMap(underlyingDirectory);
 	  } else {
 		  for (INode inode: parent.getChildrenList()) {
@@ -2287,7 +2281,7 @@ public class FSDirectory implements Closeable {
 	  }
 	  
 	  if (underlyingDirectory != null) {
-		  NameNode.LOG.info("--- MPSR ---: mkdirUnderlying() : Setting up underlying directory parent [parent = '" + parent + "']."); 
+		  NameNode.LOG.info("--- MPSR ---: mkdirUnderlying() : Setting up underlying directory parent [parent = '" + parent + "', partitioning = " + partitioning + "]."); 
 		  underlyingDirectory.setParent(parent);
 		  parent.addChild(underlyingDirectory);
 		  master.addUnderlyingDirectory(partitioning, underlyingDirectory);
@@ -2314,7 +2308,7 @@ public class FSDirectory implements Closeable {
     try {
     	INodesInPath iip = getExistingPathINodesMpsr(components, src, partitioningType);
     	//if (!iip.getINode(iip.getNumNonNull()-1).isFile()) {
-	    	NameNode.LOG.info("--- MPSR ---: addINodeMpsr() : INodes in path = " + iip);
+	    	NameNode.LOG.trace("--- MPSR ---: addINodeMpsr() : INodes in path = " + iip);
 	    	return addLastINodeMpsr(iip, child, true);
     	/*} else {
     		components = INode.getPathComponents(removeFileFromPath(src));
@@ -2330,21 +2324,6 @@ public class FSDirectory implements Closeable {
   
   
   
-  
-  
-  
-  private boolean addINodeMpsr(String src, INode child) throws QuotaExceededException, UnresolvedLinkException {
-	    NameNode.LOG.info("--- MPSR ---: addINodeMpsr() : Path = " + src);
-		  byte[][] components = INode.getPathComponents(src);
-	    child.setLocalName(components[components.length-1]);
-	    //cacheName(child);
-	    writeLock();
-	    try {
-	      return addLastINodeMpsr(getExistingPathINodesMpsr(components, src), child, true);
-	    } finally {
-	      writeUnlock();
-	    }
-	  }
   
   
   
@@ -2537,7 +2516,23 @@ public class FSDirectory implements Closeable {
    */
   private boolean addLastINodeMpsr(INodesInPath inodesInPath,
       INode inode, boolean checkQuota) throws QuotaExceededException {
-    final int pos = inodesInPath.getINodes().length - 1;
+    int pos = inodesInPath.getINodes().length - 1;
+    //Log.info("--- MPSR ---: addLastINodeMpsr() : " + inodesInPath);
+    NameNode.LOG.info("--- MPSR ---: addLastINodeMpsr() : isINodeFile = " + (inodesInPath.getINode(pos-1) instanceof INodeFile));
+    if (inodesInPath.getINode(pos-1) != null) {
+    	NameNode.LOG.info("--- MPSR ---: addLastINodeMpsr() : ----> inode class " + inodesInPath.getINode(pos-1).getClass().getSimpleName());
+    } else {	
+    	NameNode.LOG.info("--- MPSR ---: addLastINodeMpsr() : ----> inode class null");
+    }
+	if (inodesInPath.getINode(pos-1) instanceof INodeFile) {
+    	if (inodesInPath.getINode(pos-1).getLocalName().equals(inode.getLocalName())) {
+    		NameNode.LOG.info("--- MPSR ---: addLastINodeMpsr() : keeping position");
+    		return true;
+    	} else {
+    		pos = pos - 1;
+    		NameNode.LOG.info("--- MPSR ---: addLastINodeMpsr() : lowering position");
+    	}
+    }
     return addChildMpsr(inodesInPath, pos, inode, checkQuota);
   }
   
@@ -2649,12 +2644,16 @@ public class FSDirectory implements Closeable {
     final Quota.Counts counts = child.computeQuotaUsage();
     updateCount(iip, pos,
         counts.get(Quota.NAMESPACE), counts.get(Quota.DISKSPACE), checkQuota);*/
-    boolean isRename = (child.getParent() != null);
+    //boolean isRename = (child.getParent() != null);
+    boolean existing = false;
 
     boolean added = false;
-    NameNode.LOG.info("--- MPSR ---: addChildMpsr() : Getting parent for directory [pos = '" + pos + "'].");
+    if (child != null) {
+    	NameNode.LOG.info("--- MPSR ---: addChildMpsr() : Getting parent for directory [name = " + child.getLocalName() + ", pos = '" + pos + "'].");
+    }
+    
     if (inodes[pos-1] instanceof INodeDirectory) {
-        NameNode.LOG.info("--- MPSR ---: addChildMpsr() : Getting parent for directory [iip = '" + iip.toString() + "'].");
+        //NameNode.LOG.info("--- MPSR ---: addChildMpsr() : Getting parent for directory [iip = '" + iip.toString() + "'].");
 	    final INodeDirectory parent = inodes[pos-1].asDirectory();
 	    try {
 	      added = parent.addChild(child, true, iip.getLatestSnapshotId());
@@ -2665,11 +2664,20 @@ public class FSDirectory implements Closeable {
 	      throw e;
 	    }
     } else if (inodes[pos-1] instanceof INodeUnderlyingDirectory) {
-    	NameNode.LOG.info("--- MPSR ---: addChildMpsr() : Getting parent for underlying directory [iip = '" + iip.toString() + "'].");
+    	//NameNode.LOG.info("--- MPSR ---: addChildMpsr() : Getting parent for underlying directory [iip = '" + iip.toString() + "'].");
     	final INodeUnderlyingDirectory parent = (INodeUnderlyingDirectory)inodes[pos-1];
 	    try {
-	      added = parent.addChild(child, true, iip.getLatestSnapshotId());
-	      NameNode.LOG.info("--- MPSR ---: addChildMpsr() : Adding child to underlying '" + parent.getLocalName() + "' result = "+ added);
+	    	INode existingChild = parent.getChild(child.getLocalNameBytes(), iip.getLatestSnapshotId());
+	    	if (existingChild == null) {
+	  	      added = parent.addChild(child, true, iip.getLatestSnapshotId());
+		      NameNode.LOG.info("--- MPSR ---: addChildMpsr() : Adding child to underlying '" + parent.getLocalName() + "' result = "+ added);
+	    	} else {
+	    		added = true;
+	    		existing = true;
+	    		iip.setINode(pos, existingChild);
+	    		NameNode.LOG.info("--- MPSR ---: addChildMpsr() : Child exists '" + child.getLocalName() + "' result = "+ added);
+	    	}
+
 	    } catch (QuotaExceededException e) {
 	      /*updateCountNoQuotaCheck(iip, pos,
 	          -counts.get(Quota.NAMESPACE), -counts.get(Quota.DISKSPACE));*/
@@ -2707,7 +2715,9 @@ public class FSDirectory implements Closeable {
       /*if (!isRename) {
         AclStorage.copyINodeDefaultAcl(child);
       }*/
-      addToInodeMap(child);
+    	if (!existing) {
+    		addToInodeMap(child);
+    	}
     }
     return added;
   }

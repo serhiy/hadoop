@@ -113,13 +113,16 @@ public class DatanodeProtocolServerSideTranslatorPB implements
   public HeartbeatResponseProto sendHeartbeat(RpcController controller,
       HeartbeatRequestProto request) throws ServiceException {
     HeartbeatResponse response;
+    //LOG.info("--- MPSR --- : sendHeartbeat() : Server received partitioning " + request.getRegistration().getDatanodeID().getPartitioning());
     try {
       final StorageReport[] report = PBHelper.convertStorageReports(
           request.getReportsList());
+      //LOG.info("--- MPSR --- : sendHeartbeat() : Sending to namenode rcp.");
       response = impl.sendHeartbeat(PBHelper.convert(request.getRegistration()),
           report, request.getCacheCapacity(), request.getCacheUsed(),
           request.getXmitsInProgress(),
           request.getXceiverCount(), request.getFailedVolumes());
+      //LOG.info("--- MPSR --- : sendHeartbeat() : Got namenode rcp response.");
     } catch (IOException e) {
       throw new ServiceException(e);
     }
@@ -133,6 +136,7 @@ public class DatanodeProtocolServerSideTranslatorPB implements
         }
       }
     }
+    
     builder.setHaStatus(PBHelper.convert(response.getNameNodeHaState()));
     RollingUpgradeStatus rollingUpdateStatus = response
         .getRollingUpdateStatus();

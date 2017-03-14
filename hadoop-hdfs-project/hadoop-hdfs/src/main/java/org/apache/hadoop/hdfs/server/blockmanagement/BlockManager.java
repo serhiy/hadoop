@@ -93,6 +93,8 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
 
+import cern.mpe.hadoop.hdfs.server.namenode.MPSRPartitioningProvider;
+
 /**
  * Keeps information related to the blocks stored in the Hadoop cluster.
  */
@@ -1705,8 +1707,7 @@ public class BlockManager {
           }
           NumberReplicas num = countNodes(timedOutItems[i]);
           if (isNeededReplication(bi, getReplication(bi), num.liveReplicas())) {
-            neededReplications.add(bi, num.liveReplicas(),
-                num.decommissionedReplicas(), getReplication(bi));
+        	  neededReplications.add(bi, num.liveReplicas(), num.decommissionedReplicas(), getReplication(bi));
           }
         }
       } finally {
@@ -3513,8 +3514,7 @@ public class BlockManager {
     } else {
       blockInfo = getStoredBlock(b);
     }
-    return blockInfo.isComplete()
-        && (current < expected || !isPlacementPolicySatisfied(b));
+    return blockInfo.isComplete() && (current < expected || !isPlacementPolicySatisfied(b));
   }
   
   public long getMissingBlocksCount() {

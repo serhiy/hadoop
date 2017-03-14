@@ -241,4 +241,23 @@ public class Block implements Writable, Comparable<Block> {
     //GenerationStamp is IRRELEVANT and should not be used here
     return (int)(blockId^(blockId>>>32));
   }
+  
+  	private int partitioning = -1;
+  	private boolean isMpsr = false;
+  
+	public int getPartitioning() {
+		return partitioning;
+	}
+	
+	public void setPartitioning(int partitioning) {
+		this.partitioning = partitioning;
+	}
+
+	public boolean isMpsr() {
+		return isMpsr;
+	}
+
+	public void setMpsr(boolean isMpsr) {
+		this.isMpsr = isMpsr;
+	}
 }

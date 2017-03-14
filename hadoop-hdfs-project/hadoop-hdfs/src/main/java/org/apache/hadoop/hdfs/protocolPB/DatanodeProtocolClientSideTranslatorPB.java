@@ -137,6 +137,9 @@ public class DatanodeProtocolClientSideTranslatorPB implements
         .setRegistration(PBHelper.convert(registration))
         .setXmitsInProgress(xmitsInProgress).setXceiverCount(xceiverCount)
         .setFailedVolumes(failedVolumes);
+    
+    //LOG.info("--- MPSR --- : sendHeartbeat() : Partitioning = " + builder.getRegistration().getDatanodeID().getPartitioning());
+    
     builder.addAllReports(PBHelper.convertStorageReports(reports));
     if (cacheCapacity != 0) {
       builder.setCacheCapacity(cacheCapacity);

@@ -119,6 +119,7 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
       List<DatanodeDescriptor> favoredNodes,
       BlockStoragePolicy storagePolicy) {
     try {
+    	LOG.info("--- MPSR --- : chooseTarget() : Favored nodes size " + favoredNodes.size());
       if (favoredNodes == null || favoredNodes.size() == 0) {
         // Favored nodes not specified, fall back to regular block placement.
         return chooseTarget(src, numOfReplicas, writer,
@@ -132,6 +133,8 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
           .chooseStorageTypes((short)numOfReplicas);
       final EnumMap<StorageType, Integer> storageTypes =
           getRequiredStorageTypes(requiredStorageTypes);
+      
+      LOG.info("--- MPSR --- : chooseTarget() : favoriteAndExcludedNodes = " + favoriteAndExcludedNodes.size() + ", requiredStorageTypes = " + requiredStorageTypes.size() + ", storageTypes = " + storageTypes.size());
 
       // Choose favored nodes
       List<DatanodeStorageInfo> results = new ArrayList<DatanodeStorageInfo>();
@@ -141,6 +144,8 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
       int maxNodesAndReplicas[] = getMaxNodesPerRack(0, numOfReplicas);
       numOfReplicas = maxNodesAndReplicas[0];
       int maxNodesPerRack = maxNodesAndReplicas[1];
+      
+      LOG.info("--- MPSR --- : chooseTarget() : Favored nodes size " + favoredNodes.size() + ", results size = " + results.size() + ", numOfReplicas = " + numOfReplicas);
 
       for (int i = 0; i < favoredNodes.size() && results.size() < numOfReplicas; i++) {
         DatanodeDescriptor favoredNode = favoredNodes.get(i);
@@ -149,6 +154,9 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
         final DatanodeStorageInfo target = chooseLocalStorage(favoredNode,
             favoriteAndExcludedNodes, blocksize, maxNodesPerRack,
             results, avoidStaleNodes, storageTypes, false);
+        
+        //LOG.info("--- MPSR --- : chooseTarget() : target = " + target.getDatanodeDescriptor().getIpAddr());
+        
         if (target == null) {
           LOG.warn("Could not find a target for file " + src
               + " with favored node " + favoredNode); 
@@ -167,6 +175,9 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
           results.add(remainingTargets[i]);
         }
       }
+      
+      LOG.info("--- MPSR --- : chooseTarget() : results size = " + results.size());
+      
       return getPipeline(writer,
           results.toArray(new DatanodeStorageInfo[results.size()]));
     } catch (NotEnoughReplicasException nr) {

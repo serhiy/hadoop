@@ -3154,6 +3154,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     		  newNodes = new INodeFile[MPSRPartitioningProvider.NUM_PARTITIONS];
     		  for (int i = 0; i < MPSRPartitioningProvider.NUM_PARTITIONS; i++) {
     			  newNodes[i] = dir.addFileMpsr(src, permissions, replication, blockSize, holder, clientMachine, i);
+    			  LOG.info("--- MPSR ---: startFileInternalMpsr() : New nodes " + newNodes[i] + ", for partitioning " + i);
     		  }
     	  }
       }
@@ -3164,24 +3165,32 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
         throw new IOException("--- MPSR ---: Unable to add " + src +  " to namespace");
       }
       
+      LOG.info("--- MPSR ---: startFileInternalMpsr() : New nodes size " + newNodes.length);
       for (INodeFile newNode: newNodes) {
     	  //TODO: possible problem here because of src
-    	  String path = getMpsrPath(newNode, true);
-    	  leaseManager.addLease(newNode.getFileUnderConstructionFeature().getClientName(), path);
+    	  if (newNode != null) {
+    		  LOG.info("--- MPSR ---: startFileInternalMpsr() : New nodes size " + newNode.getLocalName() + ", id " + newNode.getId());
+    	  }
     	  
-	      // Set encryption attributes if necessary
-	      /*if (feInfo != null) {
-	        dir.setFileEncryptionInfo(src, feInfo);
-	        newNode = dir.getInode(newNode.getId()).asFile();
-	      }*/
-	
-	      //TODO:
-	      //setNewINodeStoragePolicy(newNode, iip, isLazyPersist);
-	
-	      // record file record in log, record new generation stamp
-    	  boolean logRetryEntry = false;
-	      getEditLog().logOpenFile(path, newNode, overwrite, logRetryEntry);
-	      NameNode.stateChangeLog.info("--- MPSR ---: DIR* NameSystem.startFile: added " + path + " inode " + newNode.getId() + " " + holder);
+    	  String path = getMpsrPath(newNode, true);
+    	  if (newNode.isUnderConstruction()) {
+    		  leaseManager.addLease(newNode.getFileUnderConstructionFeature().getClientName(), path);
+    	  
+    	  
+		      // Set encryption attributes if necessary
+		      /*if (feInfo != null) {
+		        dir.setFileEncryptionInfo(src, feInfo);
+		        newNode = dir.getInode(newNode.getId()).asFile();
+		      }*/
+		
+		      //TODO:
+		      //setNewINodeStoragePolicy(newNode, iip, isLazyPersist);
+		
+		      // record file record in log, record new generation stamp
+	    	  boolean logRetryEntry = false;
+		      getEditLog().logOpenFile(path, newNode, overwrite, logRetryEntry);
+		      NameNode.stateChangeLog.info("--- MPSR ---: DIR* NameSystem.startFile: added " + path + " inode " + newNode.getId() + " " + holder);
+    	  }
     	}
       return toRemoveBlocks;
     } catch (IOException ie) {
@@ -4040,6 +4049,11 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     final DatanodeStorageInfo targets[] = getBlockManager().chooseTarget4NewBlock( 
         src, replication, clientNode, excludedNodes, blockSize, favoredNodes,
         storagePolicyID);
+    
+    LOG.info("--- MPSR --- : getAdditionalBlockMpsr() : Choosen targets . . .");
+    for (DatanodeStorageInfo target : targets) {
+    	LOG.info("--- MPSR --- : getAdditionalBlockMpsr(): Node " + target.getDatanodeDescriptor().getInfoAddr());
+    }
 
     // Part II.
     // Allocate a new block, add it to the INode and the BlocksMap. 
@@ -4079,9 +4093,12 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 
       // allocate new block, record block locations in INode.
       newBlock = createNewBlock();
+      
       LOG.info("--- MPSR ---: getAdditionalBlockMpsr() : New block " + newBlock.getBlockId());
       INodesInPath inodesInPath = INodesInPath.fromINode(pendingFile);
-      LOG.info("--- MPSR ---: getAdditionalBlockMpsr() : INodes in path " + inodesInPath);
+      newBlock.setMpsr(true);
+      newBlock.setPartitioning(((INodeUnderlyingDirectory)inodesInPath.getINode(0)).getPartitioning());
+      //LOG.info("--- MPSR ---: getAdditionalBlockMpsr() : INodes in path " + inodesInPath);
       saveAllocatedBlock(src, inodesInPath, newBlock, targets);
 
       persistNewBlock(src, pendingFile);
@@ -4450,7 +4467,13 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     //byte[][] pathComponents = INode.getPathComponents(src);
     boolean complete = (INode.getPathComponents(src).length - 2 ) == MPSRPartitioningProvider.tagsSize();
     LOG.info("--- MPSR --- : completeFileMpsr() : Component size = " + INode.getPathComponents(src).length + ", tag size = " + MPSRPartitioningProvider.tagsSize());
-    INodesInPath[] iips = dir.getAllINodesInPath4WriteMpsr(src, false, complete);
+    INodesInPath[] iips;
+    if (complete) {
+    	iips = dir.getAllINodesInPath4WriteMpsr(src, false, complete);
+    } else {
+    	iips = new INodesInPath[1];
+    	iips[0] = INodesInPath.resolveMpsrExact(dir.rootDir, INode.getPathComponents(src));
+    }
     
     LOG.info("--- MPSR --- : completeFileMpsr() : Resolved inode paths = " + iips.length);
     
@@ -4461,10 +4484,14 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       checkNameNodeSafeMode("Cannot complete file " + src);
       //src = resolvePath(src, pathComponents);
       for (INodesInPath iip: iips) {
-    	  LOG.info("--- MPSR --- : completeFileMpsr() : --> Completing " + iip);
-    	  src = getMpsrPath(iip.getINode(iip.getNumNonNull() - 1).asFile(), true);
-    	  LOG.info("--- MPSR --- : completeFileMpsr() : --> Completing " + src);
-    	  success = completeFileInternalMpsr(iip, src, holder, ExtendedBlock.getLocalBlock(last), fileId);
+    	  try {
+	    	  //LOG.info("--- MPSR --- : completeFileMpsr() : --> Completing " + iip);
+	    	  src = getMpsrPath(iip.getINode(iip.getNumNonNull() - 1).asFile(), true);
+	    	  LOG.info("--- MPSR --- : completeFileMpsr() : --> Completing " + src);
+	    	  success = completeFileInternalMpsr(iip, src, holder, ExtendedBlock.getLocalBlock(last), fileId);
+    	  } catch (Exception e) {
+    		  LOG.warn("--- MPSR ---: completeFileMpsr() : Exception occured. Continue with rest of MPSR files.", e);
+    	  }
       }
     } finally {
       writeUnlock();
@@ -5490,10 +5517,17 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
           throw new FileAlreadyExistsException("Parent path is not a directory: " + pathbuilder + " "+inodes[i].getLocalName());
         }
         
+        LOG.info("--- MPSR ---: mkdirsRecursivelyMpsr() : Directory " + inodes[i].getLocalName() + "(id = " + inodes[i].getId() + ")");
+        
         // get the pointer to the last existing underlying directory
         for (int j = 0; j < MPSRPartitioningProvider.NUM_PARTITIONS; j++) {
-	        if (((INodeDirectory)inodes[i]).getUnderlyingDirectory(j) != null) {
-	        	underlyingInodes[j] = (INodeUnderlyingDirectory) ((INodeDirectory)inodes[i]).getUnderlyingDirectory(j);
+        	INodesInPath mpsrINodes = INodesInPath.resolveMpsrForPosition(dir.rootDir, components, i + 1, j);
+        	
+	        if (mpsrINodes.getINode(i) != null) {
+	        	underlyingInodes[j] = (INodeUnderlyingDirectory) mpsrINodes.getINode(i);
+	        	LOG.info("--- MPSR ---: mkdirsRecursivelyMpsr() : Last existing = " + underlyingInodes[j].getLocalName() + ", partitioning = " + j);
+	        } else {
+	        	LOG.info("--- MPSR ---: mkdirsRecursivelyMpsr() : Last existing = " + underlyingInodes[j].getLocalName() + ", partitioning = " + j);
 	        }
         }
       }
@@ -10578,7 +10612,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
 					
 					for (INode uchild: udir.getChildrenList()) {
 						if (uchild instanceof INodeFile) {
-							LOG.info(spaces(level) + " " + uchild.getLocalName() + " block num = " + uchild.asFile().numBlocks());
+							LOG.info(spaces(level) + " " + uchild.getLocalName() + " id = " + uchild.getId() + " block num = " + uchild.asFile().numBlocks());
 						}
 					}
 				} else {

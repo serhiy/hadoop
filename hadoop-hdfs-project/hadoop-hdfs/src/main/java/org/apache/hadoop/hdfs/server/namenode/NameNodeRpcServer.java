@@ -636,6 +636,9 @@ class NameNodeRpcServer implements NamenodeProtocols {
     	info = namesystem.appendFile(src, clientName, clientMachine);
     	metrics.incrFilesAppended();
     }
+    
+    namesystem.printFS();
+    
     return info;
   }
   
