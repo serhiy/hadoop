@@ -1847,10 +1847,13 @@ public class FSDirectory implements Closeable {
 	  INodesInPath iip = getLastINodeInPath(src);
 	  NameNode.LOG.info("--- MPSR ---: getINode() : Inodes in path = " + iip);
 	  if (MPSRPartitioningProvider.isMpsr(src)) {
-		  return iip.getINode(iip.getNumNonNull()-1);
+		  if (iip != null) {
+			  return iip.getINode(iip.getNumNonNull()-1);
+		  }
 	  } else {
 		  return iip.getINode(0);
 	  }
+	  return null;
   }
   
   /*public List<INode> getINode(String src) throws UnresolvedLinkException {
@@ -2153,9 +2156,11 @@ public class FSDirectory implements Closeable {
 		for(int i = 0; i < inodes.length && inodes[i] != null; i++) {
 			NameNode.LOG.trace("--- MPSR ---: unprotectedMkdirMpsr() : Determining underlying directories [master = '" + inodes[i].getLocalName() + "'].");
 	        for (int j = 0; j < MPSRPartitioningProvider.NUM_PARTITIONS; j++) {
-		        if (((INodeDirectory)inodes[i]).getUnderlyingDirectory(j) != null) {
+	        	underlyingInodes[j] = (INodeUnderlyingDirectory) INodesInPath.resolveLastExistingMpsr(rootDir, components, j).getLastINode();
+	        	
+	        	/*if (((INodeDirectory)inodes[i]).getUnderlyingDirectory(j) != null) {
 		        	underlyingInodes[j] = (INodeUnderlyingDirectory) ((INodeDirectory)inodes[i]).getUnderlyingDirectory(j);
-		        }
+		        }*/
 		        NameNode.LOG.trace("--- MPSR ---: unprotectedMkdirMpsr() : Underlying directory determine [udir = '" + underlyingInodes[j].getLocalName() + "', partitioning = '" + j + "']");
 	        }
 	    }
@@ -2173,6 +2178,16 @@ public class FSDirectory implements Closeable {
 			  if (((INodeDirectory)inode).getUnderlyingDirectory(p)!=null && ((INodeDirectory)inode).getUnderlyingDirectory(p).getId() > inodeId) {
 				  inodeId = ((INodeDirectory)inode).getUnderlyingDirectory(p).getId();
 			  }
+		  }
+	  }
+	  return inodeId;
+  }
+  
+  public long getLastInodeId(INode [] inodes) {
+	  long inodeId = 0;
+	  for (INode inode: inodes) {
+		  if (inode.getId() > inodeId) {
+			  inodeId = inode.getId();
 		  }
 	  }
 	  return inodeId;
@@ -2253,11 +2268,17 @@ public class FSDirectory implements Closeable {
   
   
   public INodeUnderlyingDirectory mkdirUnderlying(INodeDirectory master, INodeUnderlyingDirectory parent, String subdirectory, int partitioning) {
+	  if (parent.getLocalName().equals(subdirectory)) {
+		  return parent;
+	  }
+	  
 	  NameNode.LOG.info("--- MPSR ---: mkdirUnderlying() : Subdirectory = " + subdirectory + ", partitioning = " + partitioning); 
 	  INodeUnderlyingDirectory underlyingDirectory = null;
 	  if (MPSRPartitioningProvider.getPartitioningTags(partitioning).contains(MPSRPartitioningProvider.getTag(subdirectory))) {
 		  NameNode.LOG.info("--- MPSR ---: mkdirUnderlying() : Partitioning tag contains = " + MPSRPartitioningProvider.getTag(subdirectory)); 
+		  NameNode.LOG.info("--- MPSR ---: mkdirUnderlying() : Children : ");
 		  for (INode inode: parent.getChildrenList()) {
+			  NameNode.LOG.info("--- MPSR ---: mkdirUnderlying() : --------------------- : " + inode.getLocalName() + " (subdirectory = " + subdirectory + ")");
 			  if (inode.getLocalName().equals(subdirectory)) {
 				  underlyingDirectory = (INodeUnderlyingDirectory) inode;
 			  }

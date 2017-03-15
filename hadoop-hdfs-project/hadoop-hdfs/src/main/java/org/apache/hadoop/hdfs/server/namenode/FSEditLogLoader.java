@@ -32,9 +32,14 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
+import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.XAttrSetFlag;
+import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.hadoop.fs.permission.PermissionStatus;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockStoragePolicySuite;
+import org.apache.hadoop.hdfs.DFSUtil;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.CacheDirectiveInfo;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants;
@@ -359,7 +364,9 @@ public class FSEditLogLoader {
       INodeFile oldFile;
       
       if (MPSRPartitioningProvider.isMpsr(path)) {
-		  iip = INodesInPath.resolveMpsrExact(fsDir.rootDir, INode.getPathComponents(path));
+    	  byte [][] components = INode.getPathComponents(path);
+    	  iip = INodesInPath.resolveMpsrForPosition(fsDir.rootDir, components, components.length, MPSRPartitioningProvider.getPartitioning(path));
+		  //iip = INodesInPath.resolveMpsrExact(fsDir.rootDir, INode.getPathComponents(path), true);
 		  inodes = iip.getINodes();
 		  oldFile = INodeFile.valueOf(inodes[inodes.length - 1], path, true);
       } else {
@@ -396,7 +403,7 @@ public class FSEditLogLoader {
         	newFile = fsDir.unprotectedAddFileMpsr(inodeId,
     	            path, addCloseOp.permissions, addCloseOp.aclEntries,
     	            addCloseOp.xAttrs,
-    	            replication, addCloseOp.mtime, addCloseOp.atime,
+    	            (short)(replication*MPSRPartitioningProvider.NUM_PARTITIONS), addCloseOp.mtime, addCloseOp.atime,
     	            addCloseOp.blockSize, true, addCloseOp.clientName,
     	            addCloseOp.clientMachine, addCloseOp.storagePolicyId, partitioning);
 
@@ -471,7 +478,11 @@ public class FSEditLogLoader {
 
       INodeFile file;
       if (MPSRPartitioningProvider.isMpsr(path)) {
-    	  INodesInPath iip = fsDir.getINodesInPath4WriteMpsr(path);
+    	  /*INodesInPath iip = fsDir.getINodesInPath4WriteMpsr(path);
+    	  LOG.info("--- MPSR --- : applyEditLogOp() : inodes in path test " + iip);*/
+    	  byte [][] components = INode.getPathComponents(path);
+    	  INodesInPath iip = INodesInPath.resolveMpsrForPosition(fsDir.rootDir, components, components.length, MPSRPartitioningProvider.getPartitioning(path), true);
+    	  LOG.info("--- MPSR --- : applyEditLogOp() : inodes in path test " + iip);
     	  file = iip.getINode(iip.getNumNonNull() - 1).asFile();
       } else {
 	      file = INodeFile.valueOf(fsDir.getLastINodeInPath(path).getINode(0), path);
@@ -488,8 +499,7 @@ public class FSEditLogLoader {
         // There was a bug (HDFS-2991) in hadoop < 0.23.1 where OP_CLOSE
         // could show up twice in a row. But after that version, this
         // should be fixed, so we should treat it as an error.
-        throw new IOException(
-            "File is not under construction: " + path);
+        /*throw new IOException("File is not under construction: " + path);*/
       }
       // One might expect that you could use removeLease(holder, path) here,
       // but OP_CLOSE doesn't serialize the holder. So, remove by path.
@@ -583,9 +593,17 @@ public class FSEditLogLoader {
       inodeId = getAndUpdateLastInodeId(mkdirOp.inodeId, logVersion,
           lastInodeId);
   		LOG.info("--- MPSR ---: applyEditLogOp() : MK_DIR operation [inodeId = '" + inodeId + "'].");
-  		inodeId = fsDir.getLastInodeId(fsDir.unprotectedMkdirMpsr(inodeId,
-          renameReservedPathsOnUpgrade(mkdirOp.path.replaceAll("//", "/"), logVersion),
-          mkdirOp.permissions, mkdirOp.aclEntries, mkdirOp.timestamp));
+  		if (MPSRPartitioningProvider.isMpsr(mkdirOp.path.replaceAll("//", "/"))) {
+	  		inodeId = fsDir.getLastInodeId(fsDir.unprotectedMkdirMpsr(inodeId,
+	          renameReservedPathsOnUpgrade(mkdirOp.path.replaceAll("//", "/"), logVersion),
+	          mkdirOp.permissions, mkdirOp.aclEntries, mkdirOp.timestamp));
+  			//PermissionStatus ps = new PermissionStatus(mkdirOp.permissions.getUserName(), mkdirOp.permissions.getGroupName(), mkdirOp.permissions.getPermission());
+  			//inodeId = fsDir.getLastInodeId(fsNamesys.mkdirsRecursivelyMpsr(mkdirOp.path, ps, false, mkdirOp.timestamp, true, inodeId));
+  		} else {
+	  		inodeId = fsDir.getLastInodeId(fsDir.unprotectedMkdir(inodeId,
+	  	          renameReservedPathsOnUpgrade(mkdirOp.path, logVersion),
+	  	          mkdirOp.permissions, mkdirOp.aclEntries, mkdirOp.timestamp));
+  		}
       break;
     }
     case OP_SET_GENSTAMP_V1: {

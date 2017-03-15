@@ -5475,12 +5475,17 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
   
   
   
-  
+  public INode[] mkdirsRecursivelyMpsr(String src, PermissionStatus permissions,
+          boolean inheritPermission, long now) throws FileAlreadyExistsException, QuotaExceededException,
+  UnresolvedLinkException, SnapshotAccessControlException,
+  AclException  {
+	  return mkdirsRecursivelyMpsr(src, permissions, inheritPermission, now, false, null);
+  }
   
   
   // serhiy
-  private INode[] mkdirsRecursivelyMpsr(String src, PermissionStatus permissions,
-                 boolean inheritPermission, long now)
+  public INode[] mkdirsRecursivelyMpsr(String src, PermissionStatus permissions,
+                 boolean inheritPermission, long now, boolean restore, Long inodeId)
           throws FileAlreadyExistsException, QuotaExceededException,
                  UnresolvedLinkException, SnapshotAccessControlException,
                  AclException {
@@ -5567,7 +5572,12 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       // create directories beginning from the first null index
       for(; i < inodes.length; i++) {
         pathbuilder.append(Path.SEPARATOR).append(DFSUtil.bytes2String(components[i]));
-        Map<INodeDirectory, INodeUnderlyingDirectory[]> createdDir = dir.unprotectedMkdirMpsr(this.allocateNewInodeId(), iip, i, components[i], (i < lastInodeIndex) ? parentPermissions : permissions, null, now, underlyingInodes);
+        Map<INodeDirectory, INodeUnderlyingDirectory[]> createdDir;
+        if (!restore) {
+        	createdDir = dir.unprotectedMkdirMpsr(this.allocateNewInodeId(), iip, i, components[i], (i < lastInodeIndex) ? parentPermissions : permissions, null, now, underlyingInodes);
+        } else {
+        	createdDir = dir.unprotectedMkdirMpsr(inodeId, iip, i, components[i], (i < lastInodeIndex) ? parentPermissions : permissions, null, now, underlyingInodes);
+        }
         
         Map.Entry<INodeDirectory, INodeUnderlyingDirectory[]> entry = createdDir.entrySet().iterator().next();
         underlyingInodes = entry.getValue();
@@ -5577,11 +5587,13 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
         }
         // Directory creation also count towards FilesCreated
         // to match count of FilesDeleted metric.
-        NameNode.getNameNodeMetrics().incrFilesCreated();
-
-        final String cur = pathbuilder.toString();
-        getEditLog().logMkDir(cur, inodes[i]);
-        NameNode.stateChangeLog.info("mkdirs: created directory " + cur);
+        if (!restore) {
+	        NameNode.getNameNodeMetrics().incrFilesCreated();
+	
+	        final String cur = pathbuilder.toString();
+	        getEditLog().logMkDir(cur, inodes[i]);
+	        NameNode.stateChangeLog.info("mkdirs: created directory " + cur);
+        }
       }
     } finally {
       dir.writeUnlock();

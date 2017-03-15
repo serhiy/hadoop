@@ -518,7 +518,35 @@ public class INodesInPath {
 	  return null;
   }
   
+  static INodesInPath resolveLastExistingMpsr(final INodeDirectory startingDir, final byte[][] components, int partitioning) {
+	  int count = 1;
+	  INode currNode = startingDir.getUnderlyingDirectory(partitioning);
+	  List<INode> existingINodes = new ArrayList<INode>();
+	  existingINodes.add(currNode);
+	  while (count < components.length) {
+		  if (currNode.isUnderlyingDirectory()) {
+			  INode inode = ((INodeUnderlyingDirectory)currNode).getChild(components[count], Snapshot.CURRENT_STATE_ID);
+			  if (inode != null) {
+				  currNode = inode;
+				  existingINodes.add(currNode);
+			  }
+		  }
+		  
+		  count ++;
+	  }
+	  
+	  INodesInPath iip = new INodesInPath(components, existingINodes.size());
+	  for (INode existingINode : existingINodes) {
+		  iip.addNode(existingINode);
+	  }
+	  return iip;
+  }
+  
   static INodesInPath resolveMpsrForPosition(final INodeDirectory startingDir, final byte[][] components, int pos, int partitioning) throws UnresolvedLinkException {
+	  return resolveMpsrForPosition(startingDir, components, pos, partitioning, false);
+  }
+  
+  static INodesInPath resolveMpsrForPosition(final INodeDirectory startingDir, final byte[][] components, int pos, int partitioning, boolean withFile) throws UnresolvedLinkException {
 	  
 	  int count = 1;
 	  INode currNode = startingDir.getUnderlyingDirectory(partitioning);
@@ -543,6 +571,11 @@ public class INodesInPath {
 			  INode inode = ((INodeUnderlyingDirectory)currNode).getChild(components[count], Snapshot.CURRENT_STATE_ID);
 			  if (inode != null) {
 				  currNode = inode;
+				  if (withFile && currNode.isFile()) {
+					  LOG.info("--- MPSR --- : resolveMpsrForPosition() : Adding file : " + currNode.getLocalName());
+					  existingINodes.add(currNode);
+					  break;
+				  }
 			  }
 		  }
 		  
@@ -611,7 +644,7 @@ public class INodesInPath {
 		    
 		    existingInodes = new ArrayList<INode>();
 
-		    LOG.trace("--- MPSR ---: resolveMpsrUnknownPartitioning(): Resolving path. [path = '" + src + "', partitioningType = '" + i + "']");
+		    LOG.info("--- MPSR ---: resolveMpsrUnknownPartitioning(): Resolving path. [path = '" + src + "', partitioningType = '" + i + "']");
 		    while (count < components.length && curNode != null) {
 		      final boolean lastComp = (count == components.length - 1);      
 		      if (index >= 0 && changed) {
@@ -627,11 +660,11 @@ public class INodesInPath {
 		      }
 		      final byte[] childName = components[count + 1];
 		      
-		      LOG.trace("--- MPSR ---: resolveMpsrUnknownPartitioning(): Current node [name = '" + dir.getLocalName() + "'].");
+		      LOG.info("--- MPSR ---: resolveMpsrUnknownPartitioning(): Current node [name = '" + dir.getLocalName() + "'].");
 		      
 		      INode child = dir.getChild(childName, Snapshot.CURRENT_STATE_ID);
 		      if (child != null) {
-		    	  LOG.trace("--- MPSR ---: resolveMpsrUnknownPartitioning(): Child found! [curNode = '" + curNode.getLocalName() + "', child = '" + DFSUtil.bytes2String(childName) + "']");
+		    	  LOG.info("--- MPSR ---: resolveMpsrUnknownPartitioning(): Child found! [curNode = '" + curNode.getLocalName() + "', child = '" + DFSUtil.bytes2String(childName) + "']");
 				  curNode = child;
 		    	  changed = true;
 		      } else {
@@ -658,7 +691,7 @@ public class INodesInPath {
 	    }
 	    //existing.addNode(null);
 	    
-	    LOG.trace("--- MPSR ---: resolveMpsrUnknownPartitioning(): Path resolved. [path = '" + existing.toString(false) + "']");
+	    LOG.info("--- MPSR ---: resolveMpsrUnknownPartitioning(): Path resolved. [path = '" + existing.toString(false) + "']");
 	    
 	    return existing;
 	  }

@@ -5,6 +5,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.hadoop.hdfs.server.namenode.NameNode;
+
 public class MPSRPartitioningProvider {
 	
 	public static final int NUM_PARTITIONS = 3;
@@ -73,6 +75,41 @@ public class MPSRPartitioningProvider {
 		//sb.append(paths[paths.length - 1]);
 		
 		return sb.toString();
+	}
+	
+	public static int getPartitioning(String path) {
+		String [] pathComponents = path.split("/");
+		List<String> sanitizedPathComponents = new ArrayList<String>();
+		for (String pathComponent: pathComponents) {
+			if (!pathComponent.isEmpty() && isMpsr(pathComponent)) {
+				sanitizedPathComponents.add(pathComponent);
+			}
+		}
+		
+		pathComponents = sanitizedPathComponents.toArray(new String[sanitizedPathComponents.size()]);
+		
+		for (Map.Entry<Integer, List<String>> partitioningEntry: partitioning.entrySet()) {
+			boolean matches = true;
+			String[] partitioningTags = partitioningEntry.getValue().toArray(new String[partitioningEntry.getValue().size()]);
+			NameNode.LOG.info("===================== " + partitioningTags.length + " " + pathComponents.length);
+			if (partitioningTags.length != pathComponents.length) {
+				matches = false;
+				continue;
+			}
+			
+			for (int count = 0; count < partitioningTags.length; count++) {
+				NameNode.LOG.info("--- ----------------------------- tag = " + partitioningTags[count] + " path comp = " + getTag(pathComponents[count]));
+				if (!partitioningTags[count].equals(getTag(pathComponents[count]))) {
+					matches = false;
+					break;
+				}
+			}
+			if (matches) {
+				return partitioningEntry.getKey();
+			}
+		}
+		
+		return -1;
 	}
 	
 	public static int tagsSize() {
