@@ -9,6 +9,7 @@ import org.apache.hadoop.fs.PathIsNotDirectoryException;
 import org.apache.hadoop.fs.permission.PermissionStatus;
 import org.apache.hadoop.hdfs.DFSUtil;
 import org.apache.hadoop.hdfs.protocol.QuotaExceededException;
+import org.apache.hadoop.hdfs.server.blockmanagement.BlockStoragePolicySuite;
 import org.apache.hadoop.hdfs.server.namenode.Quota.Counts;
 import org.apache.hadoop.hdfs.util.ReadOnlyList;
 
@@ -81,12 +82,12 @@ public class INodeUnderlyingDirectory extends INodeWithAdditionalFields implemen
 
 	@Override
 	public byte getStoragePolicyID() {
-		throw new UnsupportedOperationException("'getStoragePolicyID' is not yet supported operation.");
+		return BlockStoragePolicySuite.ID_UNSPECIFIED;
 	}
 
 	@Override
 	public byte getLocalStoragePolicyID() {
-		throw new UnsupportedOperationException("'getLocalStoragePolicyID' is not yet supported operation.");
+		return BlockStoragePolicySuite.ID_UNSPECIFIED;
 	}
 
 	/** Cast INode to INodeUnderlyingDirectory. */

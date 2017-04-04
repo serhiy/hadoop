@@ -94,6 +94,7 @@ import org.apache.hadoop.hdfs.util.ByteArray;
 import org.apache.hadoop.hdfs.util.ChunkedArrayList;
 import org.apache.hadoop.hdfs.util.ReadOnlyList;
 import org.apache.hadoop.security.AccessControlException;
+import org.mortbay.log.Log;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -396,6 +397,9 @@ public class FSDirectory implements Closeable {
     INodesInPath iip = getExistingPathINodesMpsr(components, path, partitioningType);
     INodeFile newNode = null;
     if (iip.getINode(iip.length() - 2) != null && !(iip.getINode(iip.length() - 2) instanceof INodeFile)) {
+    	if (replication < 3) {
+    		replication = 3;
+    	}
     	newNode = newINodeFile(namesystem.allocateNewInodeId(), permissions, modTime, modTime, (short)Math.ceil(replication/MPSRPartitioningProvider.NUM_PARTITIONS), preferredBlockSize); 
     	newNode.toUnderConstruction(clientName, clientMachine);
     } else if (iip.getINode(iip.length() - 2) != null && (iip.getINode(iip.length() - 2) instanceof INodeFile)) {
@@ -1662,6 +1666,83 @@ public class FSDirectory implements Closeable {
     }
   }
   
+  
+  
+  DirectoryListing getListingMpsr(String src, byte[] startAfter,
+	      boolean needLocation, boolean isSuperUser, int partitioning)
+	      throws UnresolvedLinkException, IOException {
+	    String srcs = normalizePath(src);
+	    final boolean isRawPath = isReservedRawName(src);
+
+	    readLock();
+	    try {
+	      if (srcs.endsWith(HdfsConstants.SEPARATOR_DOT_SNAPSHOT_DIR)) {
+	        return getSnapshotsListing(srcs, startAfter);
+	      }
+	      //final INodesInPath inodesInPath = getINodesInPathMpsr(srcs, true, partitioning);
+	      final byte[][] components = INode.getPathComponents(srcs);
+	      final INodesInPath inodesInPath = INodesInPath.resolveLastExistingMpsr(rootDir, components, partitioning);
+	      NameNode.LOG.info("--- MPSR --- : getListingMpsr() : " + inodesInPath);
+	      final INode[] inodes = inodesInPath.getINodes();
+	      final int snapshot = inodesInPath.getPathSnapshotId();
+	      final INode targetNode = inodes[inodesInPath.getNumNonNull() - 1];
+	      NameNode.LOG.info("--- MPSR --- : getListingMpsr() : target node = " + targetNode);
+	      if (targetNode == null)
+	        return null;
+	      
+	      NameNode.LOG.info("--- MPSR --- : getListingMpsr() : target node = " + targetNode.getLocalName() + " id = " + targetNode.getId());
+	      
+	      byte parentStoragePolicy = BlockStoragePolicySuite.ID_UNSPECIFIED;
+	      
+	      if (!targetNode.isUnderlyingDirectory()) {
+	        return new DirectoryListing(
+	            new HdfsFileStatus[]{createFileStatus(HdfsFileStatus.EMPTY_NAME,
+	                targetNode, needLocation, parentStoragePolicy, snapshot,
+	                isRawPath, inodesInPath)}, 0);
+	      }
+
+	      final INodeUnderlyingDirectory dirInode = (INodeUnderlyingDirectory) targetNode;
+	      final ReadOnlyList<INode> contents = dirInode.getChildrenList();
+	      //int startChild = INodeDirectory.nextChild(contents, startAfter);
+	      int totalNumChildren = contents.size();
+	      NameNode.LOG.info("--- MPSR --- : getListingMpsr() : Number of children " + totalNumChildren);
+	      int numOfListing = Math.min(totalNumChildren/*-startChild*/, this.lsLimit);
+	      int locationBudget = this.lsLimit;
+	      int listingCnt = 0;
+	      HdfsFileStatus listing[] = new HdfsFileStatus[numOfListing];
+	      for (int i=0; i<numOfListing && locationBudget>0; i++) {
+	        INode cur = contents.get(i);
+	    	NameNode.LOG.info("--- MPSR --- : getListingMpsr() : Adding child to directory listing " + cur.getLocalName());
+	        byte curPolicy = isSuperUser && !cur.isSymlink()?
+	            cur.getLocalStoragePolicyID():
+	            BlockStoragePolicySuite.ID_UNSPECIFIED;
+	        listing[i] = createFileStatusMpsr(cur.getLocalNameBytes(), cur, needLocation,
+	            getStoragePolicyID(curPolicy, parentStoragePolicy), snapshot,
+	            isRawPath, inodesInPath);
+	        listingCnt++;
+	        if (needLocation) {
+	            // Once we  hit lsLimit locations, stop.
+	            // This helps to prevent excessively large response payloads.
+	            // Approximate #locations with locatedBlockCount() * repl_factor
+	            LocatedBlocks blks = 
+	                ((HdfsLocatedFileStatus)listing[i]).getBlockLocations();
+	            locationBudget -= (blks == null) ? 0 :
+	               blks.locatedBlockCount() * listing[i].getReplication();
+	        }
+	      }
+	      // truncate return array if necessary
+	      if (listingCnt < numOfListing) {
+	          listing = Arrays.copyOf(listing, listingCnt);
+	      }
+	      return new DirectoryListing(
+	          listing, totalNumChildren-listingCnt);
+	    } finally {
+	      readUnlock();
+	    }
+	  }
+  
+  
+  
   /**
    * Get a listing of all the snapshots of a snapshottable directory
    */
@@ -1745,30 +1826,36 @@ public class FSDirectory implements Closeable {
 	      
 	      INodesInPath inodesInPath = null;
 	      INode i = null;
-	      HdfsFileStatus hdfsFileStatus = null;
-	      
+
 	      if (includeAllPartitions) {
-	    	  hdfsFileStatus = new HdfsFileStatus(MPSRPartitioningProvider.NUM_PARTITIONS);
 	    	  for (int p = 0; p < MPSRPartitioningProvider.NUM_PARTITIONS; p++ ) {
 	    		  inodesInPath = getINodesInPathMpsr(srcs, resolveLink, p);
-	    		  i = inodesInPath.getINodes()[inodesInPath.getNumNonNull() - 1];
-	    		  createFileStatusMpsr(HdfsFileStatus.EMPTY_NAME, i,
+	    		  if (inodesInPath.getNumNonNull() > 1 && inodesInPath.getINodes()[inodesInPath.getNumNonNull() - 1].isFile()) {
+		    		  i = inodesInPath.getINodes()[inodesInPath.getNumNonNull() - 1];
+		    	  } else {
+		    		  i = null;
+		    	  }
+	    		  
+	    		  /*createFileStatusMpsr(HdfsFileStatus.EMPTY_NAME, i,
 	    		          policyId, inodesInPath.getPathSnapshotId(), isRawPath,
 	    		          inodesInPath, p, hdfsFileStatus);
-	    		  NameNode.LOG.info("--- MPSR ---: getFileInfoMpsr() : Added " + printINodes(inodesInPath.getINodes()) + " to file status.");
+	    		  NameNode.LOG.info("--- MPSR ---: getFileInfoMpsr() : Added " + printINodes(inodesInPath.getINodes()) + " to file status.");*/
 	    	  }
 	      } else {
 	    	  inodesInPath = getINodesInPathUnknownPartitioning(srcs, resolveLink);
-		      i = inodesInPath.getINodes()[inodesInPath.getNumNonNull() - 1];
+	    	  if (inodesInPath.getNumNonNull() > 1 && inodesInPath.getINodes()[inodesInPath.getNumNonNull() - 1].isFile()) {
+	    		  i = inodesInPath.getINodes()[inodesInPath.getNumNonNull() - 1];
+	    	  } else {
+	    		  i = null;
+	    	  }
 	      }
 
-	      
 	      NameNode.LOG.info("--- MPSR ---: getFileInfoMpsr() : Inode = " + i);
-	      
-	      
-	      return i == null ? null : createFileStatusMpsr(HdfsFileStatus.EMPTY_NAME, i,
-	          policyId, inodesInPath.getPathSnapshotId(), isRawPath,
-	          inodesInPath);
+		  
+		  return i == null ? null : createFileStatusMpsr(HdfsFileStatus.EMPTY_NAME, i,
+		          policyId, inodesInPath.getPathSnapshotId(), isRawPath,
+		          inodesInPath);
+
 	    } finally {
 	      readUnlock();
 	    }
@@ -2078,12 +2165,12 @@ public class FSDirectory implements Closeable {
   private static INode[] getRelativePathINodes(INode inode, INode ancestor) {
     // calculate the depth of this inode from the ancestor
     int depth = 0;
-    NameNode.LOG.info("--- MPSR ---: getRelativePathINodes() : Determining the depth . . .");
+    NameNode.LOG.trace("--- MPSR ---: getRelativePathINodes() : Determining the depth . . .");
     for (INode i = inode; i != null && !i.equals(ancestor); i = i.isParentUDir()? i.getUParent(): i.getParent()) {
-    	NameNode.LOG.info("--- MPSR ---: getRelativePathINodes() : INode id = " + i.getId() +  " name = " + i.getLocalName());
+    	NameNode.LOG.trace("--- MPSR ---: getRelativePathINodes() : INode id = " + i.getId() +  " name = " + i.getLocalName());
       depth++;
     }
-    NameNode.LOG.info("--- MPSR ---: getRelativePathINodes() : Depth = " + depth);
+    NameNode.LOG.trace("--- MPSR ---: getRelativePathINodes() : Depth = " + depth);
     
     INode[] inodes = new INode[depth];
 
@@ -2272,20 +2359,20 @@ public class FSDirectory implements Closeable {
 		  return parent;
 	  }
 	  
-	  NameNode.LOG.info("--- MPSR ---: mkdirUnderlying() : Subdirectory = " + subdirectory + ", partitioning = " + partitioning); 
+	  NameNode.LOG.trace("--- MPSR ---: mkdirUnderlying() : Subdirectory = " + subdirectory + ", partitioning = " + partitioning); 
 	  INodeUnderlyingDirectory underlyingDirectory = null;
 	  if (MPSRPartitioningProvider.getPartitioningTags(partitioning).contains(MPSRPartitioningProvider.getTag(subdirectory))) {
-		  NameNode.LOG.info("--- MPSR ---: mkdirUnderlying() : Partitioning tag contains = " + MPSRPartitioningProvider.getTag(subdirectory)); 
-		  NameNode.LOG.info("--- MPSR ---: mkdirUnderlying() : Children : ");
+		  NameNode.LOG.trace("--- MPSR ---: mkdirUnderlying() : Partitioning tag contains = " + MPSRPartitioningProvider.getTag(subdirectory)); 
+		  NameNode.LOG.trace("--- MPSR ---: mkdirUnderlying() : Children : ");
 		  for (INode inode: parent.getChildrenList()) {
-			  NameNode.LOG.info("--- MPSR ---: mkdirUnderlying() : --------------------- : " + inode.getLocalName() + " (subdirectory = " + subdirectory + ")");
+			  NameNode.LOG.trace("--- MPSR ---: mkdirUnderlying() : --------------------- : " + inode.getLocalName() + " (subdirectory = " + subdirectory + ")");
 			  if (inode.getLocalName().equals(subdirectory)) {
 				  underlyingDirectory = (INodeUnderlyingDirectory) inode;
 			  }
 		  }
 		  
 		  if (underlyingDirectory != null) {
-			  NameNode.LOG.info("--- MPSR ---: mkdirUnderlying() : Underlying directory already exists. Will not create directory.");
+			  NameNode.LOG.trace("--- MPSR ---: mkdirUnderlying() : Underlying directory already exists. Will not create directory.");
 			  return underlyingDirectory;
 		  }
 		  
@@ -3092,6 +3179,19 @@ public class FSDirectory implements Closeable {
           isRawPath, iip);
     }
   }
+  
+  private HdfsFileStatus createFileStatusMpsr(byte[] path, INode node,
+	      boolean needLocation, byte storagePolicy, int snapshot,
+	      boolean isRawPath, INodesInPath iip)
+	      throws IOException {
+	    if (needLocation) {
+	      return createLocatedFileStatusMpsr(path, node, storagePolicy, snapshot,
+	          isRawPath, iip);
+	    } else {
+	      return createFileStatusMpsr(path, node, storagePolicy, snapshot,
+	          isRawPath, iip);
+	    }
+	  }
 
   
   HdfsFileStatus createFileStatusMpsr(byte[] path, INode node, byte storagePolicy,
@@ -3118,10 +3218,10 @@ public class FSDirectory implements Closeable {
 
 	     int childrenNum = node.isDirectory() ? 
 	         node.asDirectory().getChildrenNum(snapshot) : 0;
-
+ 
 	     return new HdfsFileStatus(
 	        size, 
-	        node.isDirectory(), 
+	        node.isUnderlyingDirectory(), 
 	        replication, 
 	        blocksize,
 	        node.getModificationTime(snapshot),
@@ -3289,6 +3389,61 @@ public class FSDirectory implements Closeable {
     }
     return status;
   }
+  
+  
+  private HdfsLocatedFileStatus createLocatedFileStatusMpsr(byte[] path, INode node,
+	      byte storagePolicy, int snapshot, boolean isRawPath,
+	      INodesInPath iip) throws IOException {
+	    assert hasReadLock();
+	    long size = 0; // length is zero for directories
+	    short replication = 0;
+	    long blocksize = 0;
+	    LocatedBlocks loc = null;
+	    final boolean isEncrypted;
+	    final FileEncryptionInfo feInfo = isRawPath ? null :
+	        getFileEncryptionInfo(node, snapshot, iip);
+	    if (node.isFile()) {
+	      final INodeFile fileNode = node.asFile();
+	      size = fileNode.computeFileSize(snapshot);
+	      replication = fileNode.getFileReplication(snapshot);
+	      blocksize = fileNode.getPreferredBlockSize();
+
+	      final boolean inSnapshot = snapshot != Snapshot.CURRENT_STATE_ID; 
+	      final boolean isUc = !inSnapshot && fileNode.isUnderConstruction();
+	      final long fileSize = !inSnapshot && isUc ? 
+	          fileNode.computeFileSizeNotIncludingLastUcBlock() : size;
+
+	      loc = getFSNamesystem().getBlockManager().createLocatedBlocks(
+	          fileNode.getBlocks(), fileSize, isUc, 0L, size, false,
+	          inSnapshot, feInfo);
+	      if (loc == null) {
+	        loc = new LocatedBlocks();
+	      }
+	      isEncrypted = (feInfo != null) ||
+	          (isRawPath && isInAnEZ(INodesInPath.fromINode(node)));
+	    } else {
+	      isEncrypted = isInAnEZ(INodesInPath.fromINode(node));
+	    }
+	    int childrenNum = node.isDirectory() ? 
+	        node.asDirectory().getChildrenNum(snapshot) : 0;
+
+	    HdfsLocatedFileStatus status =
+	        new HdfsLocatedFileStatus(size, node.isDirectory(), replication,
+	          blocksize, node.getModificationTime(snapshot),
+	          node.getAccessTime(snapshot),
+	          getPermissionForFileStatus(node, snapshot, isEncrypted),
+	          node.getUserName(snapshot), node.getGroupName(snapshot),
+	          node.isSymlink() ? node.asSymlink().getSymlink() : null, path,
+	          node.getId(), loc, childrenNum, feInfo, storagePolicy);
+	    // Set caching information for the located blocks.
+	    if (loc != null) {
+	      CacheManager cacheManager = namesystem.getCacheManager();
+	      for (LocatedBlock lb: loc.getLocatedBlocks()) {
+	        cacheManager.setCachedLocations(lb);
+	      }
+	    }
+	    return status;
+	  }
 
   /**
    * Returns an inode's FsPermission for use in an outbound FileStatus.  If the

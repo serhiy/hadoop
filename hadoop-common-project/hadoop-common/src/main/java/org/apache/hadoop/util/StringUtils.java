@@ -39,6 +39,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang.SystemUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.Path;
@@ -836,6 +838,9 @@ public class StringUtils {
     return format("%.2f", d);
   }
   
+  private static final Log LOG =
+		    LogFactory.getLog(StringUtils.class);
+  
   /**
    * Concatenates strings, using a separator.
    *
@@ -843,6 +848,7 @@ public class StringUtils {
    * @param strings Strings to join.
    */
   public static String join(CharSequence separator, Iterable<?> strings) {
+	  LOG.info("--- MPSR --- : join");
     Iterator<?> i = strings.iterator();
     if (!i.hasNext()) {
       return "";
@@ -852,6 +858,7 @@ public class StringUtils {
       sb.append(separator);
       sb.append(i.next().toString());
     }
+    LOG.info("--- MPSR --- : joined");
     return sb.toString();
   }
 

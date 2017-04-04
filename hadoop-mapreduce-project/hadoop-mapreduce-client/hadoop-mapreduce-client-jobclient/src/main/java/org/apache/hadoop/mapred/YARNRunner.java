@@ -109,7 +109,7 @@ public class YARNRunner implements ClientProtocol {
    * @param conf the configuration object for the client
    */
   public YARNRunner(Configuration conf) {
-   this(conf, new ResourceMgrDelegate(new YarnConfiguration(conf)));
+	  this(conf, new ResourceMgrDelegate(new YarnConfiguration(conf)));
   }
 
   /**
@@ -133,10 +133,13 @@ public class YARNRunner implements ClientProtocol {
       ClientCache clientCache) {
     this.conf = conf;
     try {
+    	LOG.info("--- MPSR --- : new YARNRunner() : setting up . . .");
       this.resMgrDelegate = resMgrDelegate;
       this.clientCache = clientCache;
       this.defaultFileContext = FileContext.getFileContext(this.conf);
+      LOG.info("--- MPSR --- : new YARNRunner() : set up.");
     } catch (UnsupportedFileSystemException ufe) {
+    	LOG.error(ufe);
       throw new RuntimeException("Error in instantiating YarnClient", ufe);
     }
   }

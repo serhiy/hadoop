@@ -109,8 +109,10 @@ public abstract class AbstractService implements Service {
    * @param name service name
    */
   public AbstractService(String name) {
+	  LOG.info("--- MPSR --- : new AbstractService() : initilizaing abstract service.");
     this.name = name;
     stateModel = new ServiceStateModel(name);
+    LOG.info("--- MPSR --- : new AbstractService() : abstract service initialized.");
   }
 
   @Override
@@ -149,24 +151,31 @@ public abstract class AbstractService implements Service {
    */
   @Override
   public void init(Configuration conf) {
+	  LOG.info("--- MPSR ---:  init() : entered . . .");
     if (conf == null) {
       throw new ServiceStateException("Cannot initialize service "
                                       + getName() + ": null configuration");
     }
     if (isInState(STATE.INITED)) {
+    	LOG.info("--- MPSR ---:  init() : already initiated!");
       return;
     }
     synchronized (stateChangeLock) {
+    	LOG.info("--- MPSR ---:  init() : initiating . . .");
       if (enterState(STATE.INITED) != STATE.INITED) {
+    	  LOG.info("--- MPSR ---:  init() : setting config . . .");
         setConfig(conf);
         try {
+        	LOG.info("--- MPSR ---:  init() : serviceInit . . .");
           serviceInit(config);
+          LOG.info("--- MPSR ---:  init() : state = " + stateModel.getState());
           if (isInState(STATE.INITED)) {
             //if the service ended up here during init,
             //notify the listeners
             notifyListeners();
           }
         } catch (Exception e) {
+        	LOG.info(e);
           noteFailure(e);
           ServiceOperations.stopQuietly(LOG, this);
           throw ServiceStateException.convert(e);
@@ -182,15 +191,19 @@ public abstract class AbstractService implements Service {
    */
   @Override
   public void start() {
+	  LOG.info("--- MPSR ---:  start() : state = " + stateModel.getState());
     if (isInState(STATE.STARTED)) {
       return;
     }
     //enter the started state
     synchronized (stateChangeLock) {
+    	LOG.info("--- MPSR ---:  start() : got lock");
       if (stateModel.enterState(STATE.STARTED) != STATE.STARTED) {
         try {
           startTime = System.currentTimeMillis();
+          LOG.info("--- MPSR ---:  start() : starting service");
           serviceStart();
+          LOG.info("--- MPSR ---:  start() : state after starting = " + stateModel.getState());
           if (isInState(STATE.STARTED)) {
             //if the service started (and isn't now in a later state), notify
             if (LOG.isDebugEnabled()) {
@@ -199,6 +212,7 @@ public abstract class AbstractService implements Service {
             notifyListeners();
           }
         } catch (Exception e) {
+        	LOG.error(e);
           noteFailure(e);
           ServiceOperations.stopQuietly(LOG, this);
           throw ServiceStateException.convert(e);
@@ -317,7 +331,7 @@ public abstract class AbstractService implements Service {
    */
   protected void serviceInit(Configuration conf) throws Exception {
     if (conf != config) {
-      LOG.debug("Config has been overridden during init");
+      LOG.info("Config has been overridden during init");
       setConfig(conf);
     }
   }
@@ -449,7 +463,7 @@ public abstract class AbstractService implements Service {
     STATE oldState = stateModel.enterState(newState);
     if (oldState != newState) {
       if (LOG.isDebugEnabled()) {
-        LOG.debug(
+        LOG.info(
           "Service: " + getName() + " entered state " + getServiceState());
       }
       recordLifecycleEvent();

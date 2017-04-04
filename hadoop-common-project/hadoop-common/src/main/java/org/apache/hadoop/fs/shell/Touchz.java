@@ -59,7 +59,7 @@ class Touch extends FsCommand {
 
     @Override
     protected void processPath(PathData item) throws IOException {
-      if (item.stat.isDirectory()) {
+      if (item.stat.isDirectory() && item.stat.getReplication() > 1) {
         // TODO: handle this
         throw new PathIsDirectoryException(item.toString());
       }

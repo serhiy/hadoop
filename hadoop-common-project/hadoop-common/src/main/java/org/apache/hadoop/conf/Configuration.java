@@ -649,7 +649,7 @@ public class Configuration implements Iterable<Map.Entry<String,String>>,
           "core-default.xml, mapred-default.xml and hdfs-default.xml " +
           "respectively");
     }
-    addDefaultResource("core-default.xml");
+    addDefaultResource("core-default.xml");;
     addDefaultResource("core-site.xml");
   }
   
@@ -690,26 +690,35 @@ public class Configuration implements Iterable<Map.Entry<String,String>>,
    */
   @SuppressWarnings("unchecked")
   public Configuration(Configuration other) {
+	  LOG.info("--- MPSR --- : new Configuration() : Initializing . . .");
    this.resources = (ArrayList<Resource>) other.resources.clone();
    synchronized(other) {
+		  LOG.info("--- MPSR --- : new Configuration() : Entered sync section.");
      if (other.properties != null) {
        this.properties = (Properties)other.properties.clone();
      }
+	  LOG.info("--- MPSR --- : new Configuration() : Properties cloned.");
 
      if (other.overlay!=null) {
        this.overlay = (Properties)other.overlay.clone();
      }
+	  LOG.info("--- MPSR --- : new Configuration() : Overlayed cloned..");
 
      this.updatingResource = new HashMap<String, String[]>(other.updatingResource);
      this.finalParameters = new HashSet<String>(other.finalParameters);
+     
    }
    
+	  LOG.info("--- MPSR --- : new Configuration() : Exit sync section.");
+   
     synchronized(Configuration.class) {
+  	  LOG.info("--- MPSR --- : new Configuration() : Enter sync section registry.");
       REGISTRY.put(this, null);
     }
     this.classLoader = other.classLoader;
     this.loadDefaults = other.loadDefaults;
     setQuietMode(other.getQuietMode());
+	  LOG.info("--- MPSR --- : new Configuration() : Finished created configuration.");
   }
   
   /**

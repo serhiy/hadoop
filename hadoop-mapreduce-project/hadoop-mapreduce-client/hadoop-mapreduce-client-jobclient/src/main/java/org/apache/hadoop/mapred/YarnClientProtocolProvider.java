@@ -22,16 +22,32 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.mapreduce.Cluster;
 import org.apache.hadoop.mapreduce.MRConfig;
 import org.apache.hadoop.mapreduce.protocol.ClientProtocol;
 import org.apache.hadoop.mapreduce.protocol.ClientProtocolProvider;
+import org.apache.hadoop.yarn.conf.YarnConfiguration;
 
 public class YarnClientProtocolProvider extends ClientProtocolProvider {
 
   @Override
   public ClientProtocol create(Configuration conf) throws IOException {
     if (MRConfig.YARN_FRAMEWORK_NAME.equals(conf.get(MRConfig.FRAMEWORK_NAME))) {
-      return new YARNRunner(conf);
+    	/*Cluster.LOG.info("--- MPSR --- : create() : Yarn config"); 
+    	try {
+    		Cluster.LOG.info("--- MPSR --- : create() : Trying conf . . .");
+    		Configuration c = new Configuration(conf);
+    		Cluster.LOG.info("--- MPSR --- : create() : Trying yarn conf . . .");
+    		YarnConfiguration yc = new YarnConfiguration(conf);
+    		Cluster.LOG.info("--- MPSR --- : create() : conf succeded.");
+    		
+    	} catch (Exception e) {
+    		Cluster.LOG.error("---> ", e);
+    	}*/
+    	//Cluster.LOG.info("--- MPSR --- : create() : RM delegate"); 
+    	//return new ResourceMgrDelegate(new YarnConfiguration(conf));
+    	Cluster.LOG.info("--- MPSR --- : create() : Yarn runner @@@."); 
+    	return new YARNRunner(conf);
     }
     return null;
   }
@@ -39,6 +55,7 @@ public class YarnClientProtocolProvider extends ClientProtocolProvider {
   @Override
   public ClientProtocol create(InetSocketAddress addr, Configuration conf)
       throws IOException {
+	  Cluster.LOG.info("--- MPSR --- : create() : Yarn runner with inet addr."); 
     return create(conf);
   }
 

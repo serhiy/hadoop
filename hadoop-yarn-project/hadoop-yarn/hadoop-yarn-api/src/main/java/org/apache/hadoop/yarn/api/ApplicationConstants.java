@@ -18,11 +18,14 @@
 
 package org.apache.hadoop.yarn.api;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience.Public;
 import org.apache.hadoop.classification.InterfaceStability.Evolving;
 import org.apache.hadoop.classification.InterfaceStability.Unstable;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.util.Shell;
+import org.apache.hadoop.yarn.factory.providers.RecordFactoryProvider;
 
 /**
  * This is the API for the applications comprising of constants that YARN sets
@@ -110,6 +113,9 @@ public interface ApplicationConstants {
    * i.e. they cannot be modified by the applications.
    */
   public enum Environment {
+	  
+
+	  
     /**
      * $USER
      * Final, non-modifiable.
@@ -232,6 +238,9 @@ public interface ApplicationConstants {
      * logging.
      */
     LOG_DIRS("LOG_DIRS");
+	  
+	  private static final Log LOG =
+			    LogFactory.getLog(Environment.class);
 
     private final String variable;
     private Environment(String variable) {
@@ -255,6 +264,7 @@ public interface ApplicationConstants {
      * </p>
      */
     public String $() {
+    	LOG.info("$$$$$$$$$");
       if (Shell.WINDOWS) {
         return "%" + variable + "%";
       } else {
@@ -272,6 +282,7 @@ public interface ApplicationConstants {
     @Public
     @Unstable
     public String $$() {
+    	LOG.info("$$$$$$$$$ $$$$$$$$$$$");
       return PARAMETER_EXPANSION_LEFT + variable + PARAMETER_EXPANSION_RIGHT;
     }
   }

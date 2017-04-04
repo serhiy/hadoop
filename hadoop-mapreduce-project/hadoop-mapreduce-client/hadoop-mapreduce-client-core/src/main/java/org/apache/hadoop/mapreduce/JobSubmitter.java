@@ -299,6 +299,8 @@ class JobSubmitter {
     InputFormat<?, ?> input =
       ReflectionUtils.newInstance(job.getInputFormatClass(), conf);
 
+    LOG.info("--- MPSR --- : writeNewSplits() : Writing new splits . . .");
+    
     List<InputSplit> splits = input.getSplits(job);
     T[] array = (T[]) splits.toArray(new InputSplit[splits.size()]);
 
@@ -313,6 +315,7 @@ class JobSubmitter {
   private int writeSplits(org.apache.hadoop.mapreduce.JobContext job,
       Path jobSubmitDir) throws IOException,
       InterruptedException, ClassNotFoundException {
+	  LOG.info("--- MPSR --- : writeSplits() : Writing the splits . . .");
     JobConf jConf = (JobConf)job.getConfiguration();
     int maps;
     if (jConf.getUseNewMapper()) {

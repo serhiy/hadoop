@@ -70,7 +70,8 @@ public class NameNodeAdapter {
   public static HdfsFileStatus getFileInfo(NameNode namenode, String src,
       boolean resolveLink) throws AccessControlException, UnresolvedLinkException,
         StandbyException, IOException {
-    return namenode.getNamesystem().getFileInfo(src, resolveLink);
+	NameNode.LOG.info("--- MPSR --- : NameNodeAdapter.getFileInfo() : getting file info.");
+	  return namenode.getNamesystem().getFileInfo(src, resolveLink);
   }
   
   public static boolean mkdirs(NameNode namenode, String src,

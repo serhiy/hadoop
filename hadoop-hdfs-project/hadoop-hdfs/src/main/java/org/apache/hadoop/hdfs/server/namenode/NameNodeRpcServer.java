@@ -553,8 +553,16 @@ class NameNodeRpcServer implements NamenodeProtocols {
       throws IOException {
     checkNNStartup();
     metrics.incrGetBlockLocations();
-    return namesystem.getBlockLocations(getClientMachine(), 
+    
+    LOG.info("--- MPSR --- : getBlockLocations() : Get block locations " + src);
+    
+    if (MPSRPartitioningProvider.isMpsr(src)) {
+    	return namesystem.getBlockLocationsMPSR(getClientMachine(), 
+                src, offset, length);
+    } else {
+    	return namesystem.getBlockLocations(getClientMachine(), 
                                         src, offset, length);
+    }
   }
   
   @Override // ClientProtocol
@@ -579,12 +587,12 @@ class NameNodeRpcServer implements NamenodeProtocols {
     HdfsFileStatus fileStatus;
     if (MPSRPartitioningProvider.isMpsr(src)) {
 	    
-    	LOG.info("--- MPSR ---: create() : Creating MPSR file.");
+    	LOG.info("--- MPSR ---: create() : Creating MPSR file, replication = " + replication);
     
 	    namesystem.checkOperation(OperationCategory.WRITE);
 	    fileStatus = namesystem.startFileMpsr(src, new PermissionStatus(
 	        getRemoteUser().getShortUserName(), null, masked),
-	        clientName, clientMachine, flag.get(), createParent, replication,
+	        clientName, clientMachine, flag.get(), createParent, replication > 0 ? replication : 3,
 	        blockSize, supportedVersions);
 	    
 	    metrics.incrFilesCreated();
@@ -727,14 +735,19 @@ class NameNodeRpcServer implements NamenodeProtocols {
     
     LocatedBlock locatedBlock;
     if (MPSRPartitioningProvider.isMpsr(src)) {
+    	LOG.info("--- MPSR --- : addBlock() : Adding MPSR block.");
     	INodesInPath iip = INodesInPath.resolveMpsrExact(namesystem.dir.rootDir, INode.getPathComponents(src));
         int partitioning = ((INodeUnderlyingDirectory)iip.getINode(0)).getPartitioning();
         LOG.info("--- MPSR --- : addBlock() : Checking partitioning exluded/included nodes " + partitioning);
         excludedNodesSet.addAll(namesystem.getBlockManager().getDatanodeManager().getPartitioningExcludedNodes(partitioning));
         favoredNodesList.addAll(namesystem.getBlockManager().getDatanodeManager().getPartitioningIncludedNodes(partitioning));
+        if (favoredNodesList.isEmpty()) {
+        	excludedNodesSet.clear();
+        }
         
     	locatedBlock = namesystem.getAdditionalBlockMpsr(src, fileId, clientName, previous, excludedNodesSet, favoredNodesList);
     } else {
+    	LOG.info("--- MPSR --- : addBlock() : Adding normal block.");
     	locatedBlock = namesystem.getAdditionalBlock(src, fileId, clientName, previous, excludedNodesSet, favoredNodesList);
     }
     
@@ -955,8 +968,13 @@ class NameNodeRpcServer implements NamenodeProtocols {
   public DirectoryListing getListing(String src, byte[] startAfter,
       boolean needLocation) throws IOException {
     checkNNStartup();
-    DirectoryListing files = namesystem.getListing(
-        src, startAfter, needLocation);
+    DirectoryListing files = null;
+    if (MPSRPartitioningProvider.isMpsr(src)) {
+    	LOG.info("--- MPSR --- : getListing() : Listing files . . ."); 
+    	files = namesystem.getListingMpsr(src, startAfter, needLocation);
+    } else {
+    	files = namesystem.getListing(src, startAfter, needLocation);
+    }
     if (files != null) {
       metrics.incrGetListingOps();
       metrics.incrFilesInGetListingOps(files.getPartialListing().length);
@@ -968,6 +986,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
   public HdfsFileStatus getFileInfo(String src)  throws IOException {
     checkNNStartup();
     metrics.incrFileInfoOps();
+    LOG.info("--- MPSR --- : getFileInfo() : get file info."); 
     return namesystem.getFileInfo(src, true);
   }
   
@@ -981,6 +1000,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
   public HdfsFileStatus getFileLinkInfo(String src) throws IOException {
     checkNNStartup();
     metrics.incrFileInfoOps();
+    LOG.info("--- MPSR --- : getFileLinkInfo() : get file info."); 
     return namesystem.getFileInfo(src, false);
   }
   
@@ -1204,6 +1224,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
 
   @Override // ClientProtocol
   public String getLinkTarget(String path) throws IOException {
+	    LOG.info("--- MPSR --- : getLinkTarget() : get file info."); 
     checkNNStartup();
     metrics.incrGetLinkTargetOps();
     HdfsFileStatus stat = null;

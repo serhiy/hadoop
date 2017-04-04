@@ -31,16 +31,18 @@ import org.apache.hadoop.classification.InterfaceStability.Unstable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.http.HttpConfig;
 import org.apache.hadoop.net.NetUtils;
-import org.apache.hadoop.security.authorize.ProxyUsers;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.yarn.api.ApplicationConstants;
 
 @Public
 @Evolving
 public class YarnConfiguration extends Configuration {
-
+  //private static final Log LOG = LogFactory.getLog(YarnConfiguration.class);
   @Private
   public static final String CS_CONFIGURATION_FILE= "capacity-scheduler.xml";
+  
+  /** Prefix for all node manager configs.*/
+  public static final String NM_PREFIX = "yarn.nodemanager.";
 
   @Private
   public static final String HADOOP_POLICY_CONFIGURATION_FILE =
@@ -88,7 +90,7 @@ public class YarnConfiguration extends Configuration {
 
   /** Delay before deleting resource to ease debugging of NM issues */
   public static final String DEBUG_NM_DELETE_DELAY_SEC =
-    YarnConfiguration.NM_PREFIX + "delete.debug-delay-sec";
+    NM_PREFIX + "delete.debug-delay-sec";
   
   ////////////////////////////////
   // IPC Configs
@@ -385,10 +387,10 @@ public class YarnConfiguration extends Configuration {
 
   public static final String RM_FAIL_FAST = RM_PREFIX + "fail-fast";
 
-  @Private
+  //@Private
   public static final String RM_WORK_PRESERVING_RECOVERY_ENABLED = RM_PREFIX
       + "work-preserving-recovery.enabled";
-  @Private
+  //@Private
   public static final boolean DEFAULT_RM_WORK_PRESERVING_RECOVERY_ENABLED =
       false;
 
@@ -589,8 +591,7 @@ public class YarnConfiguration extends Configuration {
   // Node Manager Configs
   ////////////////////////////////
   
-  /** Prefix for all node manager configs.*/
-  public static final String NM_PREFIX = "yarn.nodemanager.";
+
 
   /** Environment variables that will be sent to containers.*/
   public static final String NM_ADMIN_USER_ENV = NM_PREFIX + "admin-env";
@@ -1232,7 +1233,7 @@ public class YarnConfiguration extends Configuration {
 
   // mark app-history related configs @Private as application history is going
   // to be integrated into the timeline service
-  @Private
+  //@Private
   public static final String APPLICATION_HISTORY_PREFIX =
       TIMELINE_SERVICE_PREFIX + "generic-application-history.";
 
@@ -1240,36 +1241,36 @@ public class YarnConfiguration extends Configuration {
    *  The setting that controls whether application history service is
    *  enabled or not.
    */
-  @Private
+  //@Private
   public static final String APPLICATION_HISTORY_ENABLED =
       APPLICATION_HISTORY_PREFIX + "enabled";
-  @Private
+  //@Private
   public static final boolean DEFAULT_APPLICATION_HISTORY_ENABLED = false;
 
   /** Application history store class */
-  @Private
+  //@Private
   public static final String APPLICATION_HISTORY_STORE =
       APPLICATION_HISTORY_PREFIX + "store-class";
 
   /** Save container meta-info in the application history store. */
-  @Private
+  //@Private
   public static final String
       APPLICATION_HISTORY_SAVE_NON_AM_CONTAINER_META_INFO =
         APPLICATION_HISTORY_PREFIX + "save-non-am-container-meta-info";
-  @Private
+  //@Private
   public static final boolean
             DEFAULT_APPLICATION_HISTORY_SAVE_NON_AM_CONTAINER_META_INFO = true;
 
   /** URI for FileSystemApplicationHistoryStore */
-  @Private
+  //@Private
   public static final String FS_APPLICATION_HISTORY_STORE_URI =
       APPLICATION_HISTORY_PREFIX + "fs-history-store.uri";
 
   /** T-file compression types used to compress history data.*/
-  @Private
+  //@Private
   public static final String FS_APPLICATION_HISTORY_STORE_COMPRESSION_TYPE =
       APPLICATION_HISTORY_PREFIX + "fs-history-store.compression-type";
-  @Private
+  //@Private
   public static final String DEFAULT_FS_APPLICATION_HISTORY_STORE_COMPRESSION_TYPE =
       "none";
 
@@ -1507,7 +1508,7 @@ public class YarnConfiguration extends Configuration {
   
   public YarnConfiguration(Configuration conf) {
     super(conf);
-    if (! (conf instanceof YarnConfiguration)) {
+	if (! (conf instanceof YarnConfiguration)) {
       this.reloadConfiguration();
     }
   }
@@ -1575,7 +1576,7 @@ public class YarnConfiguration extends Configuration {
   }
 
   public static boolean useHttps(Configuration conf) {
-    return HttpConfig.Policy.HTTPS_ONLY == HttpConfig.Policy.fromString(conf
+	  return HttpConfig.Policy.HTTPS_ONLY == HttpConfig.Policy.fromString(conf
         .get(YARN_HTTP_POLICY_KEY,
             YARN_HTTP_POLICY_DEFAULT));
   }

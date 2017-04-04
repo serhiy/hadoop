@@ -91,9 +91,12 @@ public class ResourceMgrDelegate extends YarnClient {
    */
   public ResourceMgrDelegate(YarnConfiguration conf) {
     super(ResourceMgrDelegate.class.getName());
+    LOG.info("--- MPSR ---:  new ResourceMgrDelegate() : initializing . . .");
     this.conf = conf;
     this.client = YarnClient.createYarnClient();
+    LOG.info("--- MPSR ---:  new ResourceMgrDelegate() : init()");
     init(conf);
+    LOG.info("--- MPSR ---:  new ResourceMgrDelegate() : start()");
     start();
   }
 

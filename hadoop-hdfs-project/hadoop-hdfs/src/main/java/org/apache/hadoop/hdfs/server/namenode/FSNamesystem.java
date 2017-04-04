@@ -1862,6 +1862,36 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     }
     return blocks;
   }
+  
+  
+  
+  
+  
+  
+  LocatedBlocks getBlockLocationsMPSR(String clientMachine, String src,
+	      long offset, long length) throws AccessControlException,
+	      FileNotFoundException, UnresolvedLinkException, IOException {
+	    LocatedBlocks blocks = getBlockLocationsMPSR(src, offset, length, true, true,
+	        true);
+	    if (blocks != null) {
+	      blockManager.getDatanodeManager().sortLocatedBlocks(clientMachine,
+	          blocks.getLocatedBlocks());
+
+	      // lastBlock is not part of getLocatedBlocks(), might need to sort it too
+	      LocatedBlock lastBlock = blocks.getLastLocatedBlock();
+	      if (lastBlock != null) {
+	        ArrayList<LocatedBlock> lastBlockList =
+	            Lists.newArrayListWithCapacity(1);
+	        lastBlockList.add(lastBlock);
+	        blockManager.getDatanodeManager().sortLocatedBlocks(clientMachine,
+	            lastBlockList);
+	      }
+	    }
+	    return blocks;
+	  }
+  
+  
+  
 
   /**
    * Get block locations within the specified range.
@@ -1879,6 +1909,19 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       throw e;
     }
   }
+  
+  
+  LocatedBlocks getBlockLocationsMPSR(String src, long offset, long length,
+	      boolean doAccessTime, boolean needBlockToken, boolean checkSafeMode)
+	      throws FileNotFoundException, UnresolvedLinkException, IOException {
+	    try {
+	      return getBlockLocationsIntMPSR(src, offset, length, doAccessTime,
+	                                  needBlockToken, checkSafeMode);
+	    } catch (AccessControlException e) {
+	      logAuditEvent(false, "open", src);
+	      throw e;
+	    }
+	  }
 
   private LocatedBlocks getBlockLocationsInt(String src, long offset,
       long length, boolean doAccessTime, boolean needBlockToken,
@@ -1912,6 +1955,44 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     }
     return ret;
   }
+  
+  
+  
+  
+  
+  private LocatedBlocks getBlockLocationsIntMPSR(String src, long offset,
+	      long length, boolean doAccessTime, boolean needBlockToken,
+	      boolean checkSafeMode)
+	      throws FileNotFoundException, UnresolvedLinkException, IOException {
+	    if (offset < 0) {
+	      throw new HadoopIllegalArgumentException(
+	          "Negative offset is not supported. File: " + src);
+	    }
+	    if (length < 0) {
+	      throw new HadoopIllegalArgumentException(
+	          "Negative length is not supported. File: " + src);
+	    }
+	    final LocatedBlocks ret = getBlockLocationsUpdateTimesMPSR(src,
+	        offset, length, doAccessTime, needBlockToken);  
+	    logAuditEvent(true, "open", src);
+	    if (checkSafeMode && isInSafeMode()) {
+	      for (LocatedBlock b : ret.getLocatedBlocks()) {
+	        // if safemode & no block locations yet then throw safemodeException
+	        if ((b.getLocations() == null) || (b.getLocations().length == 0)) {
+	          SafeModeException se = new SafeModeException(
+	              "Zero blocklocations for " + src, safeMode);
+	          if (haEnabled && haContext != null && 
+	              haContext.getState().getServiceState() == HAServiceState.ACTIVE) {
+	            throw new RetriableException(se);
+	          } else {
+	            throw se;
+	          }
+	        }
+	      }
+	    }
+	    return ret;
+	  }
+  
 
   /*
    * Get block locations within the specified range, updating the
@@ -2006,6 +2087,101 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     }
     return null; // can never reach here
   }
+  
+  
+  private LocatedBlocks getBlockLocationsUpdateTimesMPSR(final String srcArg,
+	      long offset, long length, boolean doAccessTime, boolean needBlockToken)
+	      throws FileNotFoundException,
+	      UnresolvedLinkException, IOException {
+	    String src = srcArg;
+	    int partitioning = MPSRPartitioningProvider.getPartitioning(src);
+	    FSPermissionChecker pc = getPermissionChecker();
+	    byte[][] pathComponents = FSDirectory.getPathComponentsForReservedPath(src);
+	    for (int attempt = 0; attempt < 2; attempt++) {
+	      boolean isReadOp = (attempt == 0);
+	      if (isReadOp) { // first attempt is with readlock
+	        checkOperation(OperationCategory.READ);
+	        readLock();
+	      }  else { // second attempt is with  write lock
+	        checkOperation(OperationCategory.WRITE);
+	        writeLock(); // writelock is needed to set accesstime
+	      }
+	      try {
+	        src = resolvePath(src, pathComponents);
+	        if (isReadOp) {
+	          checkOperation(OperationCategory.READ);
+	        } else {
+	          checkOperation(OperationCategory.WRITE);
+	        }
+	        if (isPermissionEnabled) {
+	          checkPathAccess(pc, src, FsAction.READ);
+	        }
+
+	        // if the namenode is in safemode, then do not update access time
+	        if (isInSafeMode()) {
+	          doAccessTime = false;
+	        }
+
+	        final INodesInPath iip = dir.getINodesInPathMpsr(src, true, partitioning);
+	        LOG.info("--- MPSR --- : getBlockLocationsUpdateTimesMPSR() : Inodes in path = " + iip);
+	        
+	        final INode[] inodes = iip.getINodes();
+	        final INodeFile inode = INodeFile.valueOf(
+	            inodes[iip.getNumNonNull() - 1], src);
+	        
+	        if (isPermissionEnabled) {
+	          checkUnreadableBySuperuser(pc, inode, iip.getPathSnapshotId());
+	        }
+	        if (!iip.isSnapshot() //snapshots are readonly, so don't update atime.
+	            && doAccessTime && isAccessTimeSupported()) {
+	          final long now = now();
+	          if (now > inode.getAccessTime() + getAccessTimePrecision()) {
+	            // if we have to set access time but we only have the readlock, then
+	            // restart this entire operation with the writeLock.
+	            if (isReadOp) {
+	              continue;
+	            }
+	            boolean changed = dir.setTimes(inode, -1, now, false,
+	                    iip.getLatestSnapshotId());
+	            if (changed) {
+	              getEditLog().logTimes(src, -1, now);
+	            }
+	          }
+	        }
+	        final long fileSize = iip.isSnapshot() ?
+	            inode.computeFileSize(iip.getPathSnapshotId())
+	            : inode.computeFileSizeNotIncludingLastUcBlock();
+	        boolean isUc = inode.isUnderConstruction();
+	        if (iip.isSnapshot()) {
+	          // if src indicates a snapshot file, we need to make sure the returned
+	          // blocks do not exceed the size of the snapshot file.
+	          length = Math.min(length, fileSize - offset);
+	          isUc = false;
+	        }
+
+	        final FileEncryptionInfo feInfo =
+	          FSDirectory.isReservedRawName(srcArg) ?
+	          null : dir.getFileEncryptionInfo(inode, iip.getPathSnapshotId(),
+	              iip);
+
+	        final LocatedBlocks blocks =
+	          blockManager.createLocatedBlocks(inode.getBlocks(), fileSize,
+	            isUc, offset, length, needBlockToken, iip.isSnapshot(), feInfo);
+	        // Set caching information for the located blocks.
+	        for (LocatedBlock lb: blocks.getLocatedBlocks()) {
+	          cacheManager.setCachedLocations(lb);
+	        }
+	        return blocks;
+	      } finally {
+	        if (isReadOp) {
+	          readUnlock();
+	        } else {
+	          writeUnlock();
+	        }
+	      }
+	    }
+	    return null; // can never reach here
+	  }
 
   /**
    * Moves all the blocks from {@code srcs} and appends them to {@code target}
@@ -6141,6 +6317,65 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       readUnlock();
     }
   }
+  
+  DirectoryListing getListingMpsr(String src, byte[] startAfter, boolean needLocation) 
+	      throws AccessControlException, UnresolvedLinkException, IOException {
+	    try {
+	      return getListingIntMpsr(src, startAfter, needLocation);
+	    } catch (AccessControlException e) {
+	      logAuditEvent(false, "listStatus", src);
+	      throw e;
+	    }
+	  }
+  
+  private DirectoryListing getListingIntMpsr(final String srcArg, byte[] startAfter,
+	      boolean needLocation)
+	    throws AccessControlException, UnresolvedLinkException, IOException {
+	    String src = srcArg;
+	    DirectoryListing dl;
+	    FSPermissionChecker pc = getPermissionChecker();
+	    checkOperation(OperationCategory.READ);
+	    byte[][] pathComponents = FSDirectory.getPathComponentsForReservedPath(src);
+	    String startAfterString = new String(startAfter);
+	    
+	    int partitioning = MPSRPartitioningProvider.getPartitioning(src);
+	    
+	    readLock();
+	    try {
+	      checkOperation(OperationCategory.READ);
+	      src = resolvePath(src, pathComponents);
+
+	      // Get file name when startAfter is an INodePath
+	      if (FSDirectory.isReservedName(startAfterString)) {
+	        byte[][] startAfterComponents = FSDirectory
+	            .getPathComponentsForReservedPath(startAfterString);
+	        try {
+	          String tmp = FSDirectory.resolvePath(src, startAfterComponents, dir);
+	          byte[][] regularPath = INode.getPathComponents(tmp);
+	          startAfter = regularPath[regularPath.length - 1];
+	        } catch (IOException e) {
+	          // Possibly the inode is deleted
+	          throw new DirectoryListingStartAfterNotFoundException(
+	              "Can't find startAfter " + startAfterString);
+	        }
+	      }
+
+	      boolean isSuperUser = true;
+	      /*if (isPermissionEnabled) {
+	        if (dir.isDir(src)) {
+	          checkPathAccess(pc, src, FsAction.READ_EXECUTE);
+	        } else {
+	          checkTraverse(pc, src);
+	        }
+	        isSuperUser = pc.isSuperUser();
+	      }
+	      logAuditEvent(true, "listStatus", srcArg);*/
+	      dl = dir.getListingMpsr(src, startAfter, needLocation, isSuperUser, partitioning);
+	    } finally {
+	      readUnlock();
+	    }
+	    return dl;
+	  }
 
   /**
    * Get a partial listing of the indicated directory
@@ -10596,12 +10831,17 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     }
   }
   
+  private int spamFactor = 0 ;
+  
   public void printFS() {
-	  LOG.info(" --- PRINTING FILE SYSTEM --- ");
-	  
-	  printFS(dir.getRoot(), 0);
-	  
-	  LOG.info(" --- -------------------- --- ");
+	  if (spamFactor % 25 == 0) {
+		  LOG.info(" --- PRINTING FILE SYSTEM --- ");
+		  printFS(dir.getRoot(), 0);
+		  LOG.info(" --- -------------------- --- ");
+	  } else {
+		  LOG.info("Not printing, spam factor = " + spamFactor);
+	  }
+	  spamFactor ++;
   }
 
 	private void printFS(INode inode, int level) {

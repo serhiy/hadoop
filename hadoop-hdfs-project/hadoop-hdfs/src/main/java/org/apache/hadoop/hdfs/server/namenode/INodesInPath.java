@@ -559,20 +559,20 @@ public class INodesInPath {
 			  break;
 		  }*/
 		  
-		  LOG.info("--- MPSR --- : resolveMpsrForPosition() : Curr node " + currNode + ", partitioning = " + partitioning);
+		  LOG.trace("--- MPSR --- : resolveMpsrForPosition() : Curr node " + currNode + ", partitioning = " + partitioning);
 		  
 		  if (currNode.isUnderlyingDirectory()) {
-			  LOG.info("--- MPSR --- : resolveMpsrForPosition() : Current node is underlying directory.");
-			  LOG.info("--- MPSR --- : resolveMpsrForPosition() : Children : ");
+			  LOG.trace("--- MPSR --- : resolveMpsrForPosition() : Current node is underlying directory.");
+			  LOG.trace("--- MPSR --- : resolveMpsrForPosition() : Children : ");
 			  for (INode inode : ((INodeUnderlyingDirectory)currNode).getChildrenList()) {
-				  LOG.info("--- MPSR --- : resolveMpsrForPosition() : Child : " + inode.getLocalName());
+				  LOG.trace("--- MPSR --- : resolveMpsrForPosition() : Child : " + inode.getLocalName());
 			  }
 			  
 			  INode inode = ((INodeUnderlyingDirectory)currNode).getChild(components[count], Snapshot.CURRENT_STATE_ID);
 			  if (inode != null) {
 				  currNode = inode;
 				  if (withFile && currNode.isFile()) {
-					  LOG.info("--- MPSR --- : resolveMpsrForPosition() : Adding file : " + currNode.getLocalName());
+					  LOG.trace("--- MPSR --- : resolveMpsrForPosition() : Adding file : " + currNode.getLocalName());
 					  existingINodes.add(currNode);
 					  break;
 				  }
@@ -580,7 +580,7 @@ public class INodesInPath {
 		  }
 		  
 		  count ++;
-		  LOG.info("--- MPSR --- : resolveMpsrForPosition() : count " + count);
+		  LOG.trace("--- MPSR --- : resolveMpsrForPosition() : count " + count);
 	  }
 	  
 	  LOG.info("--- MPSR --- : resolveMpsrForPosition() : Existing node size = " + existingINodes.size());

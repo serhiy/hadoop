@@ -62,7 +62,7 @@ public class Cluster {
   private Path sysDir = null;
   private Path stagingAreaDir = null;
   private Path jobHistoryDir = null;
-  private static final Log LOG = LogFactory.getLog(Cluster.class);
+  public static final Log LOG = LogFactory.getLog(Cluster.class);
 
   private static ServiceLoader<ClientProtocolProvider> frameworkLoader =
       ServiceLoader.load(ClientProtocolProvider.class);
@@ -77,14 +77,16 @@ public class Cluster {
 
   public Cluster(InetSocketAddress jobTrackAddr, Configuration conf) 
       throws IOException {
+	LOG.info("--- MPSR --- : new Cluster()");
     this.conf = conf;
+    LOG.info("--- MPSR --- : new Cluster() : conf = " + conf);
     this.ugi = UserGroupInformation.getCurrentUser();
     initialize(jobTrackAddr, conf);
   }
   
   private void initialize(InetSocketAddress jobTrackAddr, Configuration conf)
       throws IOException {
-
+	  LOG.info("--- MPSR --- : initialize() : Initilizing the cluster.");
     synchronized (frameworkLoader) {
       for (ClientProtocolProvider provider : frameworkLoader) {
         LOG.debug("Trying ClientProtocolProvider : "
@@ -96,6 +98,8 @@ public class Cluster {
           } else {
             clientProtocol = provider.create(jobTrackAddr, conf);
           }
+          
+          LOG.info("--- MPSR --- : initialize() : Client protocol " + clientProtocol);
 
           if (clientProtocol != null) {
             clientProtocolProvider = provider;
@@ -105,7 +109,7 @@ public class Cluster {
             break;
           }
           else {
-            LOG.debug("Cannot pick " + provider.getClass().getName()
+            LOG.info("Cannot pick " + provider.getClass().getName()
                 + " as the ClientProtocolProvider - returned null protocol");
           }
         } 

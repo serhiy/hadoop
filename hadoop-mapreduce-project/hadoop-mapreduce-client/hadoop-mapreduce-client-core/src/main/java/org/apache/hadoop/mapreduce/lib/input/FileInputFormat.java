@@ -286,6 +286,7 @@ public abstract class FileInputFormat<K, V> extends InputFormat<K, V> {
       PathFilter inputFilter, boolean recursive) throws IOException {
     List<FileStatus> result = new ArrayList<FileStatus>();
     List<IOException> errors = new ArrayList<IOException>();
+
     for (int i=0; i < dirs.length; ++i) {
       Path p = dirs[i];
       FileSystem fs = p.getFileSystem(job.getConfiguration()); 
@@ -376,6 +377,9 @@ public abstract class FileInputFormat<K, V> extends InputFormat<K, V> {
    * @throws IOException
    */
   public List<InputSplit> getSplits(JobContext job) throws IOException {
+	  
+	  LOG.info("--- MPSR ---: getSplits() : Getting splits . . .");
+	  
     Stopwatch sw = new Stopwatch().start();
     long minSize = Math.max(getFormatMinSplitSize(), getMinSplitSize(job));
     long maxSize = getMaxSplitSize(job);

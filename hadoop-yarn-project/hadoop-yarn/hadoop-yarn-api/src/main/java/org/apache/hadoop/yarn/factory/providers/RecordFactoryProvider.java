@@ -21,6 +21,8 @@ package org.apache.hadoop.yarn.factory.providers;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience.LimitedPrivate;
 import org.apache.hadoop.classification.InterfaceStability.Unstable;
 import org.apache.hadoop.conf.Configuration;
@@ -33,6 +35,9 @@ import org.apache.hadoop.yarn.factories.RecordFactory;
 public class RecordFactoryProvider {
   private static Configuration defaultConf;
   
+  private static final Log LOG =
+		    LogFactory.getLog(RecordFactoryProvider.class);
+  
   static {
     defaultConf = new Configuration();
   }
@@ -41,11 +46,16 @@ public class RecordFactoryProvider {
   }
   
   public static RecordFactory getRecordFactory(Configuration conf) {
+	  LOG.info("--- MPSR --- : getRecordFactory() : init ");
     if (conf == null) {
+    	LOG.info("--- MPSR --- : getRecordFactory() : conf null ");
       //Assuming the default configuration has the correct factories set.
       //Users can specify a particular factory by providing a configuration.
       conf = defaultConf;
     }
+    
+    LOG.info("--- MPSR --- : getRecordFactory() : conf = " + conf);
+    
     String recordFactoryClassName = conf.get(
         YarnConfiguration.IPC_RECORD_FACTORY_CLASS,
         YarnConfiguration.DEFAULT_IPC_RECORD_FACTORY_CLASS);
@@ -54,11 +64,15 @@ public class RecordFactoryProvider {
   
   private static Object getFactoryClassInstance(String factoryClassName) {
     try {
+    	LOG.info("--- MPSR --- : getFactoryClassInstance() : init " + factoryClassName);
       Class<?> clazz = Class.forName(factoryClassName);
+      LOG.info("--- MPSR --- : getFactoryClassInstance() : class " + clazz);
       Method method = clazz.getMethod("get", null);
+      LOG.info("--- MPSR --- : getFactoryClassInstance() : method " + method);
       method.setAccessible(true);
       return method.invoke(null, null);
     } catch (ClassNotFoundException e) {
+    	LOG.error(e);
       throw new YarnRuntimeException(e);
     } catch (NoSuchMethodException e) {
       throw new YarnRuntimeException(e);

@@ -1258,6 +1258,7 @@ public class Job extends JobContextImpl implements JobContext {
 
   private synchronized void connect()
           throws IOException, InterruptedException, ClassNotFoundException {
+	LOG.info("--- MPSR --- : Cluster = " + cluster);
     if (cluster == null) {
       cluster = 
         ugi.doAs(new PrivilegedExceptionAction<Cluster>() {
@@ -1267,6 +1268,7 @@ public class Job extends JobContextImpl implements JobContext {
                      return new Cluster(getConfiguration());
                    }
                  });
+      LOG.info("--- MPSR --- : PACluster = " + cluster);
     }
   }
 

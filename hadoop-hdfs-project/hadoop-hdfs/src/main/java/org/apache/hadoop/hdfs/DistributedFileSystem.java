@@ -780,7 +780,9 @@ public class DistributedFileSystem extends FileSystem {
         // round-trips as we fetch more batches of listings
         src = getPathName(resolvePath(absF));
         // fetch the first batch of entries in the directory
+        
         thisListing = dfs.listPaths(src, HdfsFileStatus.EMPTY_NAME, true);
+        
         statistics.incrementReadOps(1);
         if (thisListing == null) { // the directory does not exist
           throw new FileNotFoundException("File " + p + " does not exist.");
